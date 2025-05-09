@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 import os
 import csv
 from io import StringIO
+from urllib.parse import quote
 
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL 
@@ -225,6 +226,14 @@ def get_play_metrics(corpus_name: str,
 
 @mcp.tool()
 def get_play_tei(corpus_name: str, play_name:str):
+    """Get TEI-XML of a play in a corpus
+    
+    Data is retrieved from the endpoint /corpora/{corpusname}/plays/{playname}/tei
+
+    Args:
+        corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
+        play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
+    """
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/tei"
         r = requests.get(request_url)
@@ -232,6 +241,25 @@ def get_play_tei(corpus_name: str, play_name:str):
             return r.text
     except Exception as e:
         return {"error": str(e)}
+
+@mcp.tool()
+def get_play_plaintext(corpus_name:str, play_name:str):
+    """Get plaintext of a play in a corpus
+    
+    Data is retrieved from the endpoint /corpora/{corpusname}/plays/{playname}/txt
+
+    Args:
+        corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
+        play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
+    """
+    try:
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/txt"
+        r = requests.get(request_url)
+        if r.status_code == 200:
+            return r.text
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @mcp.tool()
 def get_play_characters(corpus_name: str,
@@ -463,7 +491,7 @@ def get_plays_with_characters_by_wikidata_id(qid: str):
     Data is retrieved from the endpoint /character/{id}
 
     Args:
-        id (str): Wikidata-ID / Q-Number, e.g. Q131412
+        qid (str): Wikidata-ID / Q-Number, e.g. Q131412
     """
     try:
         request_url = f"{DRACOR_API_BASE_URL}/character/{qid}"
@@ -473,6 +501,147 @@ def get_plays_with_characters_by_wikidata_id(qid: str):
     
     except Exception as e:
         return {"error": str(e)}
+
+@mcp.tool()
+def get_author_info_from_wikidata(qid:str):
+    """Get information about an author from Wikidata
+    
+    Need to supply the Q-ID/Wikidata Identifier of an author.
+    
+    Data is retrieved from the endpoint /wikidata/author/{id}
+
+    Args:
+        qid (str): Wikidata-ID / Q-Number, e.g. Q34628
+    """
+    try:
+        request_url = f"{DRACOR_API_BASE_URL}/wikidata/author/{qid}"
+        r = requests.get(request_url)
+        if r.status_code == 200:
+            return {"author" : r.json() }
+    
+    except Exception as e:
+        return {"error": str(e)}
+
+@mcp.tool()
+def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
+    """Wikidata Mix'n'Match DraCor endpoint
+
+    Data is retrieved from the endpoint /wikidata/mixnmatch
+    The endpoint returns CSV data that is parsed and returned as JSON 
+    It returns id(DraCor ID),name (Main title of a play),q (the Q-Number/Wikidata Identifier if matched to Wikidata). 
+    The tool can return batches of items controlled with the parameters items_per_page and page.
+
+    Args:
+        items_per_page (int): Number of items to retrieve in a batch. Defaults to 0 (everything is returned at once).
+        page (int): Number of page of the results to retrieve in a batch request. Defaults to 0 (everything is returned at once).
+    """
+    try:
+        request_url = f"{DRACOR_API_BASE_URL}/wikidata/mixnmatch"
+        r = requests.get(request_url)
+        
+        data = []
+        if r.status_code == 200:
+            csv_filelike = StringIO(r.text)
+            reader = csv.reader(csv_filelike, delimiter=",")
+            # skip the first row:
+            next(reader, None) 
+            for row in reader:
+                item = {}
+                item["id"] = row[0]
+                item["title"] = row[1].lower()
+                if row[2] == "":
+                    item["q"] = None
+                else:
+                    item["q"] = row[2]
+                data.append(item)
+
+
+        # no batch requested if limit and offset are 0 (default)
+        if page == 0 and items_per_page == 0:
+            result = data
+            
+            # Pagination object to be returned
+            pagination = {}
+            pagination["current_page"] = 1
+            pagination["items_per_page"] = len(result)
+            pagination["total_items"] = len(result)
+            pagination["total_pages"] = 1
+            pagination["has_next_page"] = False
+            pagination["has_previous_page"] = False
+           
+        else:
+            # requested a batch
+            total_items = len(data)
+            start_index = (page - 1) * items_per_page
+            total_pages = (len(data) + items_per_page - 1) // items_per_page
+            
+            result = data[start_index:start_index + items_per_page]
+
+            pagination = {}
+            pagination["current_page"] = page
+            pagination["items_per_page"] = items_per_page
+            pagination["total_items"] = len(data)
+            pagination["total_pages"] = total_pages
+            pagination["next_page"] = page < total_pages
+            pagination["previous_page"] = page > 1
+
+
+
+        return { "pagination": pagination, "data" : data }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+# TODO: Tool/Function that filters mix'n'match result by corpus.
+@mcp.tool()
+def get_links_to_playdata_helper(corpus_name: str, play_name: str):
+    """Download Links for Play data
+    
+    Helper tool to construct links to view play data in different tools or download in different formats. 
+    On the one hand the DraCor front end implements several views of a play, including a "Download Tab". 
+    The "Tool Tab" provides links to external tools (CLARIN Language Resource Switchboard, Voyant Tools, Gephi lite). 
+    This MCP tool provides these links.
+
+    Args:
+        corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
+        play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
+    """
+    dracor_frontend_base = DRACOR_API_BASE_URL.split("/api/")[0]
+
+    urls = {}
+    urls["frontend_network_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}"
+    urls["frontend_speech_distribution_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#speech"
+    urls["frontend_fulltext_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#text"
+    urls["frontend_download_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#downloads"
+    urls["frontend_tools_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#tools"
+
+    # need to encode the url to retrieve the data for the clarin tool
+    quoted_play_url = quote(f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/", safe='')
+
+    #CLARIN Language Resource Switchboard
+    urls["frontend_tools_tab_to_clarin_language_switchboard_tei_file"] = f"https://switchboard.clarin.eu/#/vlo/{quoted_play_url}tei"
+    urls["frontend_tools_tab_to_clarin_language_switchboard_plaintext_file"] = f"https://switchboard.clarin.eu/#/vlo/{quoted_play_url}txt"
+    urls["frontend_tools_tab_to_clarin_language_switchboard_spoken-text_file"] = f"https://switchboard.clarin.eu/#/vlo/{quoted_play_url}spoken-text"
+    urls["frontend_tools_tab_to_clarin_language_switchboard_stage-directions_file"] = f"https://switchboard.clarin.eu/#/vlo/{quoted_play_url}stage-directions"
+
+
+    #Voyant Tools
+    urls["frontend_tools_tab_to_voyant_tool_tei_file"] = f"https://voyant-tools.org/?input={quoted_play_url}tei"
+    urls["frontend_tools_tab_to_voyant_tool_plaintext_file"] = f"https://voyant-tools.org/?input={quoted_play_url}txt"
+    urls["frontend_tools_tab_to_voyant_tool_spoken-text_file"] = f"https://voyant-tools.org/?input={quoted_play_url}spoken-text"
+    urls["frontend_tools_tab_to_voyant_tool_stage-directions_file"] = f"https://voyant-tools.org/?input={quoted_play_url}stage-directions"
+
+    # Gephi
+    urls["frontend_tools_tab_to_gephi"] = f"https://gephi.org/gephi-lite/?file={quoted_play_url}networkdata/gexf"
+
+    # Download Tab Formats
+    urls["download_network_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/networkdata/gexf"
+    urls["download_network_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/networkdata/graphml"
+    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/relations/gexf"
+    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/relations/graphml"    
+
+    return {"urls": urls}
+
 
 # Helper Functions
 # These functions support a smoother access of LLMs to the DraCor API, 
