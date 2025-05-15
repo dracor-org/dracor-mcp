@@ -1,32 +1,24 @@
 # DraCor MCP Server
 
-A Model Context Protocol (MCP) server for interacting with the Drama Corpora Project (DraCor) API. This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs.
+A Model Context Protocol (MCP) server for interacting with the Drama Corpora Project (DraCor). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs.
 
 ## Overview
 
 This project implements an MCP server using the official Model Context Protocol Python SDK that provides access to the DraCor API v1. It allows Claude and other LLMs to interact with dramatic text corpora, analyze character networks, retrieve play information, and generate insights about dramatic works across different languages and periods.
 
-The project includes two implementations:
-
-1. `dracor_mcp_fastmcp.py` - Streamlined implementation using the FastMCP decorator-based API with v1 API
-
 ## Features
 
 - Access to DraCor API v1 through a unified interface
 - No authentication required (DraCor API is publicly accessible)
-- Structured data models for DraCor entities
 - Support for operations:
   - Corpora and play information retrieval
-  - Character network analysis
   - Metrics and statistics for plays
   - Character information and spoken text
-  - Comparative play analysis
-  - Search functionality
-  - Character relationship data
-  - Network data in multiple formats (CSV, GEXF, GraphML)
-  - Gender analysis across plays
-  - **Full text retrieval in plain text and TEI XML formats**
-  - **Complete play text analysis**
+  - Character network analysis
+  - Stage Directions
+  - Full text retrieval in plain text and TEI XML format
+  - Granular Access to segments of a play via DTS (Distributed Text Services) API
+  - Access to DraCor's documentation (ODD, OpenAPI, API Features Ontology)
 
 ## Setup
 
@@ -37,13 +29,19 @@ The project includes two implementations:
 
 ### Installation with UV
 
-1. Install UV:
+1. Clone the repository
+
+```
+git clone git@github.com:dracor-org/dracor-mcp.git
+```
+
+2. Install UV:
 
 ```
 pip install uv
 ```
 
-2. Create a virtual environment and install dependencies:
+3. Create a virtual environment and install dependencies:
 
 ```
 uv venv
@@ -51,44 +49,14 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e .
 ```
 
-3. Install the MCP server in Claude Desktop:
+4. Add the MCP server in Claude Desktop:
 
-For standard implementation (v0 API):
-
-```
-mcp install dracor_mcp_server.py
-```
-
-Or for FastMCP implementation with v1 API (recommended):
-
-```
-mcp install dracor_mcp_fastmcp.py
-```
-
-### Development Mode
-
-For testing and development:
-
-```
-mcp dev dracor_mcp_server.py
-```
-
-Or for FastMCP implementation with v1 API (recommended):
-
-```
-mcp dev dracor_mcp_fastmcp.py
-```
-
-This will launch the MCP Inspector where you can test your tools and resources interactively.
-
-### Claude Configuration
-
-You can also directly configure Claude to use the DraCor MCP server by adding the following to your Claude configuration file:
+Add the following to your Claude configuration file:
 
 ```json
 {
   "mcpServers": {
-    "DraCor API v1": {
+    "DraCor": {
       "command": "uv",
       "args": [
         "run",
@@ -100,19 +68,23 @@ You can also directly configure Claude to use the DraCor MCP server by adding th
         "pydantic",
         "--with",
         "python-multipart",
+        "--with",
+        "rdflib",
+        "--with",
+        "lxml",
         "mcp",
         "run",
-        "/path/to/dracor-mcp/dracor_mcp_fastmcp.py"
+        "/path/to/dracor-mcp/dracor_mcp.py"
       ],
       "env": {
-        "DRACOR_API_BASE_URL": "https://dracor.org/api/v1"
+        "DRACOR_API_BASE_URL": "https://staging.dracor.org/api/v1"
       }
     }
   }
 }
 ```
 
-Replace `/path/to/dracor-mcp/` with the actual path to your dracor-mcp directory. This configuration uses `uv run` to execute the MCP server with the necessary dependencies without requiring a prior installation.
+Replace `/path/to/dracor-mcp/` with the actual absolute path to your dracor-mcp directory. This configuration uses `uv run` to execute the MCP server with the necessary dependencies without requiring a prior installation.
 
 If you want to use a different server, e.g. the staging server, change it in the environment variable `DRACOR_API_BASE_UR` in the configuration file:
 
@@ -122,53 +94,15 @@ If you want to use a different server, e.g. the staging server, change it in the
   }
 ```
 
-### Docker (optional)
+### Development Mode
 
-If you prefer using Docker:
-
-```
-docker build -t dracor-mcp .
-docker run dracor-mcp
-```
-
-To use the FastMCP implementation with v1 API instead:
+For testing and development:
 
 ```
-docker run -e IMPLEMENTATION=fastmcp dracor-mcp
+mcp dev dracor_mcp.py
 ```
 
-## Implementation Details
-
-### Standard MCP Implementation (v0 API)
-
-The standard implementation in `dracor_mcp_server.py` uses the core MCP SDK classes with the older v0 API:
-
-- `Resource` - For defining API resources
-- `MCPToolImpl` - For implementing tools
-- `PromptTemplate` - For creating prompt templates
-
-### FastMCP Implementation (v1 API)
-
-The FastMCP implementation in `dracor_mcp_fastmcp.py` uses a more concise decorator-based approach with the current v1 API:
-
-- `@mcp.resource()` - For defining API resources
-- `@mcp.tool()` - For implementing tools
-- `@mcp.prompt()` - For creating prompt templates
-
-This approach results in cleaner, more maintainable code while providing the same functionality but with access to more comprehensive API features.
-
-## v1 API Features
-
-The v1 API implementation provides access to many additional endpoints and capabilities:
-
-- **API info** - Version information for the DraCor API
-- **Corpus metadata** - Detailed metadata for all plays in a corpus
-- **Play metrics** - Network metrics and analysis data
-- **Character network data** - CSV, GEXF, and GraphML formats
-- **Character relations** - Explicit relationships between characters
-- **Spoken text filters** - Filter by gender, relation type, or character role
-- **Stage directions** - Retrieve stage directions with or without speakers
-- **Character lookup** - Find plays containing specific characters (by Wikidata ID)
+This will launch the MCP Inspector where you can test your tools and resources interactively.
 
 ## Usage
 
@@ -176,93 +110,45 @@ Once installed in Claude Desktop, you can interact with the DraCor API through C
 
 ### Basic Queries
 
-1. Ask Claude to list available corpora:
+1. Ask Claude to explain the DraCor API
+
+```
+What can I do with the DraCor API?
+```
+
+2. Ask Claude to list available corpora:
 
 ```
 Can you list all available drama corpora in DraCor?
 ```
 
-2. Get information about a specific play:
+3. Get information about a specific play:
 
 ```
 Tell me about Goethe's Faust in the German corpus
 ```
 
-3. Analyze character networks:
+4. Analyze character networks:
 
 ```
 Analyze the character network in Hamlet from the Shakespeare corpus
 ```
 
+5. Learn about DraCor TEI encoding:
+
+```
+How is the translated English title of a play encoded in the TEI?
+```
+
+6. Have data structures returned by the DraCor API explained:
+
+```
+What is the normalized year?
+```
+
 ### Advanced Queries
 
-1. Analyze character relationships:
-
-```
-What are the strongest character relationships in Pushkin's Boris Godunov?
-```
-
-2. Compare plays:
-
-```
-Compare Goethe's Faust and Schiller's Die Räuber in terms of network density and character count
-```
-
-3. Analyze character importance:
-
-```
-Who are the most central characters in Shakespeare's Hamlet based on speaking time and relationships?
-```
-
-4. Analyze gender representation:
-
-```
-Analyze the gender distribution and representation in Molière's Le Misanthrope
-```
-
-5. Find a character across different plays:
-
-```
-Find all plays that feature a character named "Hamlet" or similar
-```
-
-6. Analyze the full text of a play:
-
-```
-Provide a comprehensive analysis of the full text of Goethe's Faust
-```
-
-7. Extract themes from play text:
-
-```
-What are the main themes and motifs in the full text of Shakespeare's Hamlet?
-```
-
-8. Analyze language patterns:
-
-```
-Analyze the language patterns and style in Chekhov's The Cherry Orchard
-```
-
-### Literary Analysis Queries
-
-1. Analyze play structure:
-
-```
-Analyze the structure of Molière's Le Misanthrope in terms of acts, scenes, and dialogue distribution
-```
-
-2. Compare authors:
-
-```
-Compare the network structures in plays by Shakespeare and Molière
-```
-
-3. Historical context:
-
-```
-Put Pushkin's Boris Godunov in its historical context and analyze how this is reflected in the character network
-```
+TBD
 
 ## Resources (v1 API)
 
@@ -287,26 +173,65 @@ The FastMCP server exposes the following resources:
 
 ## Tools (v1 API)
 
-The FastMCP server provides the following tools:
+The DraCor FastMCP server provides the following tools:
 
-- `search_plays` - Search for plays based on a query
-- `compare_plays` - Compare two plays in terms of metrics and structure
-- `analyze_character_relations` - Analyze character relationships in a play
-- `analyze_play_structure` - Analyze the structure of a play
-- `find_character_across_plays` - Find a character across multiple plays
-- `analyze_full_text` - Analyze the full text of a play, including dialogue and stage directions
+### API Information
+- `get_api_info` - Get general information about the DraCor API
+- `get_api_feature_list` - Get a list of supported API features
+- `get_api_feature` - Get description of a specific API feature
+- `get_openapi_specification` - Get the complete OpenAPI Specification
 
-## Prompt Templates (v1 API)
+### Corpora
+- `get_corpora` - List all available drama corpora
+- `get_corpus` - Get information on a single corpus
+- `get_corpus_metadata` - Get extended metadata of all plays in a corpus
+- `get_corpus_metadata_paged_helper` - Get metadata on plays in a corpus in batches
+- `get_corpus_contents_paged_helper` - Get corpus contents in batches
 
-The FastMCP server includes these prompt templates:
+### Play Discovery and Filtering
+- `get_minimal_data_of_plays_of_corpus_helper` - Get minimal play data (title, author, year)
+- `get_playnames_in_corpus_helper` - Get identifiers of plays in a corpus
+- `get_plays_in_corpus_by_author_helper` - Filter plays by author in a corpus
+- `get_plays_in_corpus_by_title_helper` - Filter plays by title in a corpus
+- `get_plays_in_corpus_by_year_normalized` - Get plays in a corpus by year range
 
-- `analyze_play` - Template for analyzing a specific play
-- `character_analysis` - Template for analyzing a specific character
-- `network_analysis` - Template for analyzing a character network
-- `comparative_analysis` - Template for comparing two plays
-- `gender_analysis` - Template for analyzing gender representation in a play
-- `historical_context` - Template for analyzing the historical context of a play
-- `full_text_analysis` - Template for analyzing the full text of a play
+### Play Information
+- `get_play_metadata` - Get metadata and network metrics of a play
+- `get_play_metrics` - Get network metrics of a play
+- `get_play_tei` - Get TEI-XML of a play
+- `get_play_plaintext` - Get plaintext of a play
+- `get_links_to_playdata_helper` - Get download and external tool links for a play
+
+### Characters and Relationships
+- `get_play_characters` - Get characters of a play
+- `get_play_network` - Get the co-presence network of a play
+- `get_play_character_relations` - Get character relations in a play
+- `get_plays_with_characters_by_wikidata_id` - Find plays with a character by Wikidata ID
+
+### Text Content
+- `get_spoken_text` - Get spoken text of a play (excluding stage directions)
+- `get_spoken_text_by_characters` - Get spoken text of each character in a play
+- `get_spoken_text_of_single_character` - Get spoken text of a specific character
+- `get_stage_directions` - Get text of all stage directions in a play
+- `get_stage_directions_with_speakers` - Get stage directions including speakers
+
+### DTS (Distributed Text Services) API
+- `dts_entrypoint` - Get DTS API entry point
+- `get_corpus_via_dts` - Get corpus information through DTS API
+- `get_play_via_dts` - Get play information through DTS API
+- `get_citable_units_via_dts` - Get structural information of a play via DTS
+- `get_plaintext_of_citable_unit_via_dts` - Get text of a specific section of a play
+
+### External Data
+- `get_author_info_from_wikidata` - Get information about an author from Wikidata
+- `get_wikidata_mixnmatch` - Get Wikidata Mix'n'Match data for DraCor
+- `get_dracor_based_research` - Get research based on DraCor
+
+### Documentation
+- `get_table_of_contents_from_odd` - Get table of contents of the DraCor ODD
+- `get_odd_section` - Get a specific section of the ODD documentation
+- `get_tei_element_documentation_from_odd` - Get documentation for a TEI element
+- `get_schematron_rule_to_check_api_feature` - Get Schematron rule for API feature
 
 ## How It Works
 
@@ -320,45 +245,12 @@ When you ask Claude a question about dramatic texts, it can:
 
 The DraCor API is publicly accessible, so no authentication is required.
 
-## Rate Limiting
-
-Be mindful of DraCor's rate limiting policies. The server includes optional rate limiting settings that can be configured in the .env file.
-
-## Troubleshooting
-
-If you encounter issues:
-
-1. Ensure you're using Python 3.10 or higher
-2. Try running in development mode to debug: `mcp dev dracor_mcp_fastmcp.py`
-3. Check the DraCor API status at https://dracor.org/doc/api
-
-## Prompt to use with MCP
-
-"Your task is to analyze historical plays from the DraCor database to identify character ID tagging issues. Specifically:
-
-1. Select a play from the DraCor database and perform a comprehensive analysis of its character relations, full text, and structure.
-2. Identify all possible inconsistencies in character ID tagging, including:
-   - Spelling variations of character names
-   - Character name confusion or conflation
-   - Historical spelling variants
-   - Discrepancies between character IDs and stage directions
-3. Create a detailed report of potential character ID tagging errors in a structured table format with the following columns:
-   - Text ID (unique identifier for the play)
-   - Current character ID used in the database
-   - Problematic variant(s) found in the text
-   - Type of error (spelling, variation, confusion, etc.)
-   - Explanation of the issue
-
-do it for this text: [playname]"
-
 ## License
 
 MIT
 
 ## Acknowledgements
 
-This project uses:
+We'd like to thank [Stijn Meijers](https://github.com/stijn-meijers) of [wolk](https://www.wolk.work) for the inspiration and initial work on this MCP server. His contributions provided the foundation for this interface, enabling effective access to the DraCor API and its drama corpora resources via LLMs.
 
-- Model Context Protocol Python SDK for building the MCP server
-- DraCor API v1 for dramatic text and network data
-- Drama Corpora Project (DraCor) for providing the underlying data and API
+In the context of CLS INFRA, the project has received funding from the European Union's Horizon 2020 research and innovation programme under grant agreement [No. 101004984](https://cordis.europa.eu/project/id/101004984).
