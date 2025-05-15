@@ -150,27 +150,6 @@ What is the normalized year?
 
 TBD
 
-## Resources (v1 API)
-
-The FastMCP server exposes the following resources:
-
-- `info://` - API information and version details
-- `corpora://` - List of all available corpora
-- `corpus://{corpus_name}` - Information about a specific corpus
-- `corpus_metadata://{corpus_name}` - Metadata for all plays in a corpus
-- `plays://{corpus_name}` - List of plays in a specific corpus
-- `play://{corpus_name}/{play_name}` - Information about a specific play
-- `play_metrics://{corpus_name}/{play_name}` - Network metrics for a specific play
-- `characters://{corpus_name}/{play_name}` - List of characters in a specific play
-- `spoken_text://{corpus_name}/{play_name}` - Spoken text in a play (with optional filters)
-- `spoken_text_by_character://{corpus_name}/{play_name}` - Text spoken by each character
-- `stage_directions://{corpus_name}/{play_name}` - Stage directions in a play
-- `network_data://{corpus_name}/{play_name}` - Network data in CSV format
-- `relations://{corpus_name}/{play_name}` - Character relation data in CSV format
-- `character_by_wikidata://{wikidata_id}` - List plays containing a character by Wikidata ID
-- `full_text://{corpus_name}/{play_name}` - Full text of a play in plain text format
-- `tei_text://{corpus_name}/{play_name}` - Full TEI XML text of a play
-
 ## Tools (v1 API)
 
 The DraCor FastMCP server provides the following tools:
