@@ -232,4 +232,6 @@ MIT
 
 We'd like to thank [Stijn Meijers](https://github.com/stijn-meijers) of [wolk](https://www.wolk.work) for the inspiration and initial work on this MCP server. His contributions provided the foundation for this interface, enabling effective access to the DraCor API and its drama corpora resources via LLMs.
 
-In the context of CLS INFRA, the project has received funding from the European Union's Horizon 2020 research and innovation programme under grant agreement [No. 101004984](https://cordis.europa.eu/project/id/101004984).
+In the context of [CLS INFRA](https://clsinfra.io), the project has received funding from the European Union's Horizon 2020 research and innovation programme under grant agreement [No. 101004984](https://cordis.europa.eu/project/id/101004984).
+
+We acknowledge the [OSCARS](https://oscars-project.eu/) project, which has received funding from the European Commission’s Horizon Europe Research and Innovation programme under grant agreement [No. 101129751](https://cordis.europa.eu/project/id/101129751).
