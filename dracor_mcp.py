@@ -2,7 +2,8 @@
 
 from typing import Dict, List, Optional, Any, Union
 import requests
-from mcp.server.fastmcp import FastMCP
+from requests.auth import HTTPBasicAuth
+from mcp.server.fastmcp import FastMCP, Context
 import os
 import csv
 from io import StringIO
@@ -10,7 +11,9 @@ from urllib.parse import quote
 from rdflib import Graph, Namespace, URIRef, RDF, RDFS, OWL
 from lxml import etree
 
-
+# Admin User and Password of the (local) eXist-DB can be supplied as environment variables
+DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
+DRACOR_EXISTDB_PWD = str(os.environ.get("DRACOR_EXISTDB_PWD", ""))
 
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL 
@@ -29,6 +32,8 @@ XML_NAMESPACES = {
         }
 
 DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-frontend/refs/heads/main/public/doc/research.md"
+
+DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
 
 # Create the FastMCP server instance
 mcp = FastMCP("DraCor API v1 (dev)", 
@@ -1326,6 +1331,249 @@ def get_dracor_based_research():
         return r.text
     except Exception as e:
         return {"error": str(e)}
+
+@mcp.tool()
+def get_readme_form_dracor_api_github_repo():
+    """Get the DraCor API Readme
+    
+    The tool makes available the Readme file in the DraCor API Code repository (https://github.com/dracor-org/dracor-api) on GitHub. 
+    It includes information on how to run a local DraCor instance using Docker. 
+    """
+    try:
+        request_url = "https://raw.githubusercontent.com/dracor-org/dracor-api/refs/heads/main/README.md"
+        r = requests.get(request_url)
+        return r.text
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# Editing Support
+
+def get_relaxng_schema_helper(schema_url: str = DRACOR_RELAXNG_URL):
+    """Get DraCor RelaxNG Schema
+    
+    Helper function to fetch and parse the DraCor RelaxNG Schema
+    """
+    
+    try:
+        r = requests.get(schema_url)
+        relax_ng_doc = etree.fromstring(r.content)
+        # build the schema
+        schema = etree.RelaxNG(relax_ng_doc)
+        return schema
+    except Exception as e:
+        return {"error" : str(e)}    
+
+@mcp.tool()
+def validate_xml_file(file_name: str, file_content: str, schema_url:str = DRACOR_RELAXNG_URL):
+    """Validate XML File
+
+    Validate the content of a XML file against the DraCor schema.
+
+    Args:
+        file_name (str): Name of the file
+        file_content (str): Content of the attached XML file
+        schema_url (str): URL of the DraCor Schema. 
+            Setting is optional, don't do it if not explicitly stated in the prompt.
+    """
+    try:
+        doc = etree.fromstring(file_content.encode('utf-8'))
+        schema = get_relaxng_schema_helper(schema_url = schema_url)
+        valid = schema.validate(doc)
+        if valid:
+            return {"valid": valid,
+                    "comment": f"The XML validates against the DraCor RelaxNG schema from {schema_url}."}
+        else:
+            return {"valid": valid,
+                    "comment": f"The XML does not validate against the DraCor RelaxNG schema from {schema_url}. See error log",
+                    "error_log": schema.error_log}
+    except Exception as e:
+        return {"error": str(e)}
+
+# Admin functions (for local instances)
+
+@mcp.tool()
+def add_corpus(corpus_metadata: dict):
+    """Add a corpus
+    
+    Add a corpus to a (local) DraCor instance. It is necessary to have write access to the underlying 
+    eXist-DB database. Admin and password need to be set as environment variables DRACOR_EXISTDB_ADMIN and DRACOR_EXISTDB_PWD in the MCP server. 
+    
+    Example of the metadata: {"name": "test", "title": "Test Drama Corpus", "repository": "https://github.com/dracor-org/testdracor"}
+        
+
+    Args:
+        corpus_metadata (dict): Metadata of the corpus, e.g. {"name": "test", "title": "Test Drama Corpus", "repository": "https://github.com/dracor-org/testdracor"}
+    """
+    try:
+        credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora"
+        r = requests.post(request_url, json=corpus_metadata, auth=credentials)
+        if r.status_code == 200 or r.status_code == 201:
+            return {"status" : "Success",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json()}
+        elif r.status_code == 409:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : "Corpus already exists!"}
+        else: 
+            return {
+                "status" : "Failed",
+                "status_code" : r.status_code}
+    except Exception as e:
+        return {"error": str(e)}
+    
+@mcp.tool()
+def load_corpus_from_repository(corpus_name: str):
+    """Load corpus from GitHub Repository
+    
+    Load plays from a GitHub repository into a (local) DraCor instance.
+    It is necessary to have write access to the underlying 
+    eXist-DB database. Admin and password need to be set as environment variables DRACOR_EXISTDB_ADMIN and DRACOR_EXISTDB_PWD in the MCP server.
+    
+    Args:
+        corpus_name (str): Identifier corpus_name of the corpus to load data from GitHub into
+    """
+    try:
+        credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}"
+        payload = {"load" : True}
+        r = requests.post(request_url, json=payload, auth=credentials)
+        if r.status_code == 202:
+            return {"status" : "Success",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment": "Corpus update has been scheduled. It may take some time until the data has been loaded."}
+        elif r.status_code == 404:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : f"Corpus with the identifier {corpus_name} does not exist!"}
+        elif r.status_code == 409:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : f"Corpus update could not be scheduled. This is the response when another update has not yet finished."}
+        else:
+            return {
+                "status" : "Failed",
+                "status_code" : r.status_code}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def add_play_to_corpus(corpus_name:str, play_name: str, tei: str):
+    """Add play
+    
+    Add the TEI-file of a play to a corpus in a (local) DraCor instance.
+    It is necessary to have write access to the underlying eXist-DB database. Admin and password need to be set as environment variables DRACOR_EXISTDB_ADMIN and DRACOR_EXISTDB_PWD in the MCP server. 
+
+    Args:
+        corpus_name (str): Identifier of a corpus
+        play_name (str): Identifier (play_name) of a play in a corpus
+        tei (str): TEI-XML encoded play
+    """
+    try:
+        credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/tei"
+        headers = {"Content-Type": "application/xml"}
+        
+        # should TEI file be parsed and validated?
+        
+        r = requests.put(request_url, data=tei, headers=headers, auth=credentials)
+        if r.status_code == 200:
+            return {"status" : "Success",
+                    "status_code" : r.status_code,
+                    "comment" : f"Play {play_name} has been added to corpus {corpus_name}."}
+        elif r.status_code == 400:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "comment" : f"The request body is not a valid TEI document or the playname is invalid."}
+        elif r.status_code == 404:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "comment" : f"Corpus {corpus_name} does not exist."}
+        else:
+            return {
+                "status" : "Failed",
+                "status_code" : r.status_code}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def remove_play_from_corpus(corpus_name:str, play_name: str):
+    """Remove play from corpus
+
+    Remove a play from a corpus in a (local) DraCor instance.
+    It is necessary to have write access to the underlying 
+    eXist-DB database. Admin and password need to be set as environment variables DRACOR_EXISTDB_ADMIN and DRACOR_EXISTDB_PWD in the MCP server. 
+
+    Args:
+        corpus_name (str): Identifier of a corpus
+        play_name (str): Identifier (play_name) of a play in a corpus
+    """
+    try:
+        credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}"
+        r = requests.delete(request_url, auth=credentials)
+        if r.status_code == 200:
+            return {"status" : "Success",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : f"Play {play_name} has been removed from corpus {corpus_name}."}
+        elif r.status_code == 404:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : f"Play and/or corpus do not exist."}
+        else:
+            return {
+                "status" : "Failed",
+                "status_code" : r.status_code}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def remove_corpus(corpus_name: str):
+    """Remove corpus
+    
+    Remove a corpus from a (local) DraCor instance. It is necessary to have write access to the underlying 
+    eXist-DB database. Admin and password need to be set as environment variables DRACOR_EXISTDB_ADMIN and DRACOR_EXISTDB_PWD in the MCP server. 
+    
+    Args:
+        corpus_name (str): Identifier corpus_name of the corpus to remove
+
+    """
+    try:
+        credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}"
+        r = requests.delete(request_url, auth=credentials)
+        if r.status_code == 200:
+            return {"status" : "Success",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json()}
+        elif r.status_code == 404:
+            return {"status" : "Failed",
+                    "status_code" : r.status_code,
+                    "api_response" : r.json(),
+                    "comment" : f"Corpus with the identifier {corpus_name} does not exist!"}
+        else: 
+            return {
+                "status" : "Failed",
+                "status_code" : r.status_code}
+            
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
 
 ### --------------
 ###   PROMPTS
