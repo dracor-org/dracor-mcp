@@ -86,11 +86,21 @@ Add the following to your Claude configuration file:
 
 Replace `/path/to/dracor-mcp/` with the actual absolute path to your dracor-mcp directory. This configuration uses `uv run` to execute the MCP server with the necessary dependencies without requiring a prior installation.
 
-If you want to use a different server, e.g. the staging server, change it in the environment variable `DRACOR_API_BASE_UR` in the configuration file:
+If you want to use a different server, e.g. the staging server, change it in the environment variable `DRACOR_API_BASE_URL` in the configuration file:
 
 ```json
 "env": {
   "DRACOR_API_BASE_URL": "https://staging.dracor.org/api/v1" 
+  }
+```
+
+If running DraCor locally you can set the admin user of the eXist-DB and the password by adding the environment variables `DRACOR_EXISTDB_ADMIN` and `DRACOR_EXISTDB_PWD`:
+
+```json
+"env": {
+  "DRACOR_API_BASE_URL": "http://localhost:8088/api/v1",
+  "DRACOR_EXISTDB_ADMIN": "admin",
+  "DRACOR_EXISTDB_PWD": ""
   }
 ```
 
@@ -144,6 +154,12 @@ How is the translated English title of a play encoded in the TEI?
 
 ```
 What is the normalized year?
+```
+
+7. Manage a local DraCor instance running as Docker container:
+
+``` 
+Add a corpus with the name "mycor" to my local DraCor instance and add the play I provide you with.
 ```
 
 ### Advanced Queries
@@ -211,6 +227,13 @@ The DraCor FastMCP server provides the following tools:
 - `get_odd_section` - Get a specific section of the ODD documentation
 - `get_tei_element_documentation_from_odd` - Get documentation for a TEI element
 - `get_schematron_rule_to_check_api_feature` - Get Schematron rule for API feature
+
+### Database Management Tools
+- `add_corpus` - Add a new corpus to a (local) DraCor instance
+- `load_corpus_from_repository` - Load plays from a GitHub repository into a (local) DraCor instance
+- `add_play_to_corpus` - Add a TEI-file of a play to a corpus in a (local) DraCor instance
+- `remove_play_from_corpus` - Remove a play from a corpus in a (local) DraCor instance
+- `remove_corpus` - Remove a corpus from a (local) DraCor instance
 
 ## How It Works
 
