@@ -1587,6 +1587,8 @@ def remove_corpus(corpus_name: str):
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
-        host="127.0.0.1",
-        port=9000
+        host="0.0.0.0",
+        port=3000,
+        path="/mcp"
     )
+    

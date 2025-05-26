@@ -1,0 +1,10 @@
+services:
+  dracor-mcp:
+    image: "dracor/dracor-mcp:v1.0.0-alpha.3"
+    build:
+      context: .
+    container_name: dracor-mcp
+    environment:
+      - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
+    ports:
+      - "3000:3000"
