@@ -6,5 +6,7 @@ services:
     container_name: dracor-mcp
     environment:
       - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
+      - DRACOR_EXISTDB_ADMIN=admin
+      - DRACOR_EXISTDB_PWD=
     ports:
       - "3000:3000"

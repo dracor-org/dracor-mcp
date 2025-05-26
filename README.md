@@ -120,6 +120,29 @@ fastmcp dev dracor_mcp.py
 
 This will launch the MCP Inspector where you can test your tools and resources interactively.
 
+## Running with Docker
+
+To run the MCP server in a (local) Docker container run
+
+```
+docker compose up
+```
+
+The server is accessible at http://localhost:3000/mcp via "streamable-http". 
+
+Adapt the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "DraCor": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
+
 ## Usage
 
 Once installed in Claude Desktop, you can interact with the DraCor API through Claude. Here are some examples:
