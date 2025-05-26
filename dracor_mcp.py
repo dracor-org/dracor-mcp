@@ -3,7 +3,8 @@
 from typing import Dict, List, Optional, Any, Union
 import requests
 from requests.auth import HTTPBasicAuth
-from mcp.server.fastmcp import FastMCP, Context
+# from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import os
 import csv
 from io import StringIO
@@ -1578,3 +1579,16 @@ def remove_corpus(corpus_name: str):
 ### --------------
 ###   PROMPTS
 ### --------------
+
+
+# This runs the server.
+# Is ignored, when run with fastmcp dracor_mcp.py or fastmcp dev dracor_mcp.py
+# but becomes relevant when run in Docker container
+if __name__ == "__main__":
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=3000,
+        path="/mcp"
+    )
+    

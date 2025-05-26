@@ -41,6 +41,12 @@ git clone git@github.com:dracor-org/dracor-mcp.git
 pip install uv
 ```
 
+on Mac with homebrew installed use:
+
+```
+brew install uv
+```
+
 3. Create a virtual environment and install dependencies:
 
 ```
@@ -61,7 +67,7 @@ Add the following to your Claude configuration file:
       "args": [
         "run",
         "--with",
-        "mcp[cli]",
+        "fastmcp",
         "--with",
         "requests",
         "--with",
@@ -72,7 +78,7 @@ Add the following to your Claude configuration file:
         "rdflib",
         "--with",
         "lxml",
-        "mcp",
+        "fastmcp",
         "run",
         "/path/to/dracor-mcp/dracor_mcp.py"
       ],
@@ -109,10 +115,33 @@ If running DraCor locally you can set the admin user of the eXist-DB and the pas
 For testing and development:
 
 ```
-mcp dev dracor_mcp.py
+fastmcp dev dracor_mcp.py
 ```
 
 This will launch the MCP Inspector where you can test your tools and resources interactively.
+
+## Running with Docker
+
+To run the MCP server in a (local) Docker container run
+
+```
+docker compose up
+```
+
+The server is accessible at http://localhost:3000/mcp via "streamable-http". 
+
+Adapt the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "DraCor": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
 
 ## Usage
 
