@@ -1581,9 +1581,12 @@ def remove_corpus(corpus_name: str):
 ### --------------
 
 
+# This runs the server.
+# Is ignored, when run with fastmcp dracor_mcp.py or fastmcp dev dracor_mcp.py
+# but becomes relevant when run in Docker container
 if __name__ == "__main__":
-    # This runs the server, defaulting to STDIO transport
-    mcp.run()
-    
-    # To use a different transport, e.g., HTTP:
-    # mcp.run(transport="streamable-http", host="127.0.0.1", port=9000)
+    mcp.run(
+        transport="streamable-http",
+        host="127.0.0.1",
+        port=9000
+    )
