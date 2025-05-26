@@ -3,7 +3,8 @@
 from typing import Dict, List, Optional, Any, Union
 import requests
 from requests.auth import HTTPBasicAuth
-from mcp.server.fastmcp import FastMCP, Context
+# from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import os
 import csv
 from io import StringIO
@@ -1578,3 +1579,11 @@ def remove_corpus(corpus_name: str):
 ### --------------
 ###   PROMPTS
 ### --------------
+
+
+if __name__ == "__main__":
+    # This runs the server, defaulting to STDIO transport
+    mcp.run()
+    
+    # To use a different transport, e.g., HTTP:
+    # mcp.run(transport="streamable-http", host="127.0.0.1", port=9000)
