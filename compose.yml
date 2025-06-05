@@ -6,4 +6,4 @@ services:
       - DRACOR_EXISTDB_ADMIN=admin
       - DRACOR_EXISTDB_PWD=
     ports:
-      - "3000:3000"
+      - "8000:8000"
