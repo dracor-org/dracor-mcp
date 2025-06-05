@@ -1,7 +1,5 @@
 FROM python
 
-USER root
-
 WORKDIR /home/mcp
 
 RUN apt-get update
