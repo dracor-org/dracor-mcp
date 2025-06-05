@@ -21,6 +21,10 @@ DRACOR_EXISTDB_PWD = str(os.environ.get("DRACOR_EXISTDB_PWD", ""))
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL 
 DRACOR_API_BASE_URL = str(os.environ.get("DRACOR_API_BASE_URL", "https://staging.dracor.org/api/v1"))
 
+# Set transporation mode of the MCP server
+# defaults to "streamable-http"
+DRACOR_MCP_TRANSPORT = str(os.environ.get("DRACOR_MCP_TRANSPORT", "streamable-http"))  
+
 # URL to retrieve the DraCor API Ontology
 DRACOR_API_ONTOLOGY_URL = "https://raw.githubusercontent.com/dracor-org/dracor-ontology/refs/heads/main/v1/dracor_api_ontology.ttl"
 DRACOR_API_ONTOLOGY_NAMESPACE = Namespace("https://dracor.org/ontology/dracor-api/v1/")
@@ -1586,7 +1590,17 @@ def remove_corpus(corpus_name: str):
 # Is ignored, when run with fastmcp dracor_mcp.py or fastmcp dev dracor_mcp.py
 # but becomes relevant when run in Docker container
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http",
-            host="0.0.0.0",
-            path="/mcp"
-            )
+    if DRACOR_MCP_TRANSPORT == "sse":
+        mcp.run(transport="sse",
+                host="0.0.0.0",
+                port=8000,
+                path="/sse"
+                )
+    elif DRACOR_MCP_TRANSPORT == "streamable-http":
+        mcp.run(transport="streamable-http",
+                host="0.0.0.0",
+                port=8000,
+                path="/mcp"
+                )
+    elif DRACOR_MCP_TRANSPORT == "stdio":
+        mcp.run(transport="stdio") 
