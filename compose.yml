@@ -1,12 +1,9 @@
 services:
   dracor-mcp:
     image: "dracor/mcp:v1.0.0-alpha.5"
-    build:
-      context: .
-    container_name: dracor-mcp
     environment:
       - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
       - DRACOR_EXISTDB_ADMIN=admin
       - DRACOR_EXISTDB_PWD=
     ports:
-      - "8000:8000"
+      - "3000:3000"

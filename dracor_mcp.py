@@ -11,6 +11,7 @@ from io import StringIO
 from urllib.parse import quote
 from rdflib import Graph, Namespace, URIRef, RDF, RDFS, OWL
 from lxml import etree
+import uvicorn
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
 DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
@@ -1585,10 +1586,7 @@ def remove_corpus(corpus_name: str):
 # Is ignored, when run with fastmcp dracor_mcp.py or fastmcp dev dracor_mcp.py
 # but becomes relevant when run in Docker container
 if __name__ == "__main__":
-    mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=3000,
-        path="/mcp"
-    )
-    
+    mcp.run(transport="streamable-http",
+            host="0.0.0.0",
+            path="/mcp"
+            )
