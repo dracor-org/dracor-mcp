@@ -59,6 +59,8 @@ uv pip install -e .
 
 Add the following to your Claude configuration file:
 
+**Attention**: Probably, this needs to be fixed!
+
 ```json
 {
   "mcpServers": {
@@ -128,7 +130,7 @@ To run the MCP server in a (local) Docker container run
 docker compose up
 ```
 
-The server is accessible at http://localhost:3000/mcp via "streamable-http". 
+The server is accessible at http://localhost:8000/mcp via "streamable-http" by default. 
 
 Adapt the Claude Desktop configuration:
 
@@ -137,7 +139,28 @@ Adapt the Claude Desktop configuration:
   "mcpServers": {
     "DraCor": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:3000/mcp"]
+      "args": ["mcp-remote", "http://localhost:8000/mcp"]
+    }
+  }
+}
+```
+
+You can use the environment variable `DRACOR_MCP_TRANSPORT` to specify the transport option. Values are `streamable-http` and `sse`.
+
+To set the transport mode to sse use the provided compose file `compose.sse.dev.yml` which includes the environtment variable `DRACOR_MCP_TRANSPORT`:
+
+```
+docker compose -f compose.sse.dev.yml up 
+```
+
+Change the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "DraCor": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:8000/sse"]
     }
   }
 }

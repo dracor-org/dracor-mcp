@@ -8,6 +8,6 @@ services:
       - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
       - DRACOR_EXISTDB_ADMIN=admin
       - DRACOR_EXISTDB_PWD=
-      - DRACOR_MCP_TRANSPORT=streamable-http
+      - DRACOR_MCP_TRANSPORT=sse
     ports:
       - "8000:8000"
