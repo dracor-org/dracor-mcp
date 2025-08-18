@@ -59,6 +59,8 @@ uv pip install -e .
 
 Add the following to your Claude configuration file:
 
+**Attention**: Probably, this needs to be fixed!
+
 ```json
 {
   "mcpServers": {
