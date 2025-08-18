@@ -42,10 +42,7 @@ DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-front
 DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
 
 # Create the FastMCP server instance
-mcp = FastMCP("DraCor API v1 (dev)", 
-              request_timeout=300)
-# timeout need to be set in the inspector 
-# see https://github.com/modelcontextprotocol/inspector
+mcp = FastMCP("DraCor API v1 (dev)")
 
 
 # Helper function to make API requests

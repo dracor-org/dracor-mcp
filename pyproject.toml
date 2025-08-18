@@ -5,8 +5,7 @@ description = "DraCor MCP server for interacting with the Drama Corpora Project 
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp[cli] >= 1.9.2",
-    "fastmcp == 2.6.0",
+    "fastmcp == 2.11.3",
     "requests",
     "pydantic",
     "python-multipart",
