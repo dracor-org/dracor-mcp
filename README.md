@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server built with [FastMCP](https://gofastmcp.com) for interacting with the Drama Corpora Project ([DraCor](https://dracor.org)). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs.
 
-# Note on Compatibility
+## Note on Compatibility
 
 This version of the DraCor MCP Server has been tested with *Claude Desktop for Mac* Version 0.12.55.
 
