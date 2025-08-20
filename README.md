@@ -307,7 +307,7 @@ The DraCor API is publicly accessible, so no authentication is required.
 
 ## Evaluation
 
-The MCP Server has been evaluated for the paper *Agentic DraCor and the Art of Docstring Engineering: Evaluating MCP-empowered LLM Usage of the DraCor API* presented at the [DraCor Summit 2025](https://summit.dracor.org).
+The MCP Server has been evaluated for the paper [*Agentic DraCor and the Art of Docstring Engineering: Evaluating MCP-empowered LLM Usage of the DraCor API*](http://arxiv.org/abs/2508.13774) presented at the [DraCor Summit 2025](https://summit.dracor.org).
 
 ## License
 
