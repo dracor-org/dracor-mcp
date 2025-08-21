@@ -1,10 +1,10 @@
 # DraCor MCP Server
 
-A Model Context Protocol (MCP) server for interacting with the Drama Corpora Project (DraCor). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs.
+A Model Context Protocol (MCP) server built with [FastMCP](https://gofastmcp.com) for interacting with the Drama Corpora Project ([DraCor](https://dracor.org)). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs.
 
-## Overview
+## Note on Compatibility
 
-This project implements an MCP server using the official Model Context Protocol Python SDK that provides access to the DraCor API v1. It allows Claude and other LLMs to interact with dramatic text corpora, analyze character networks, retrieve play information, and generate insights about dramatic works across different languages and periods.
+This version of the DraCor MCP Server has been tested with *Claude Desktop for Mac* Version 0.12.55.
 
 ## Features
 
@@ -41,6 +41,12 @@ git clone git@github.com:dracor-org/dracor-mcp.git
 pip install uv
 ```
 
+on Mac with homebrew installed use:
+
+```
+brew install uv
+```
+
 3. Create a virtual environment and install dependencies:
 
 ```
@@ -51,40 +57,48 @@ uv pip install -e .
 
 4. Add the MCP server in Claude Desktop:
 
-Add the following to your Claude configuration file:
+```
+fastmcp install claude-desktop dracor_mcp.py --project /path/to/dracor-mcp/ \
+--env DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
+```
+
+Replace `/path/to/dracor-mcp/` with the actual absolute path to your cloned dracor-mcp directory.
+
+Or, manually add the following to your Claude configuration file:
+
+**Attention**: Probably, this needs to be fixed!
 
 ```json
 {
   "mcpServers": {
-    "DraCor": {
+    "DraCor API v1 (dev)": {
       "command": "uv",
       "args": [
         "run",
+        "--project",
+        "/path/to/dracor-mcp/",
         "--with",
-        "mcp[cli]",
-        "--with",
-        "requests",
-        "--with",
-        "pydantic",
-        "--with",
-        "python-multipart",
-        "--with",
-        "rdflib",
-        "--with",
-        "lxml",
-        "mcp",
+        "fastmcp",
+        "fastmcp",
         "run",
         "/path/to/dracor-mcp/dracor_mcp.py"
       ],
       "env": {
         "DRACOR_API_BASE_URL": "https://staging.dracor.org/api/v1"
-      }
+      },
+      "transport": "stdio",
+      "type": null,
+      "cwd": null,
+      "timeout": null,
+      "description": null,
+      "icon": null,
+      "authentication": null
     }
   }
 }
 ```
 
-Replace `/path/to/dracor-mcp/` with the actual absolute path to your dracor-mcp directory. This configuration uses `uv run` to execute the MCP server with the necessary dependencies without requiring a prior installation.
+Replace `/path/to/dracor-mcp/` with the actual absolute path to your dracor-mcp directory both in the "project" argument and after the "run" command. This configuration uses `uv run` to execute the MCP server with the necessary dependencies without requiring a prior installation.
 
 If you want to use a different server, e.g. the staging server, change it in the environment variable `DRACOR_API_BASE_URL` in the configuration file:
 
@@ -109,10 +123,54 @@ If running DraCor locally you can set the admin user of the eXist-DB and the pas
 For testing and development:
 
 ```
-mcp dev dracor_mcp.py
+fastmcp dev dracor_mcp.py
 ```
 
 This will launch the MCP Inspector where you can test your tools and resources interactively.
+
+## Running with Docker
+
+To run the MCP server in a (local) Docker container run
+
+```
+docker compose up
+```
+
+The server is accessible at http://localhost:8000/mcp via "streamable-http" by default. 
+
+Adapt the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "DraCor": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:8000/mcp"]
+    }
+  }
+}
+```
+
+You can use the environment variable `DRACOR_MCP_TRANSPORT` to specify the transport option. Values are `streamable-http` and `sse`.
+
+To set the transport mode to sse use the provided compose file `compose.sse.dev.yml` which includes the environtment variable `DRACOR_MCP_TRANSPORT`:
+
+```
+docker compose -f compose.sse.dev.yml up 
+```
+
+Change the Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "DraCor": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:8000/sse"]
+    }
+  }
+}
+```
 
 ## Usage
 
@@ -246,6 +304,10 @@ When you ask Claude a question about dramatic texts, it can:
 3. Provide insights and visualizations based on the data
 
 The DraCor API is publicly accessible, so no authentication is required.
+
+## Evaluation
+
+The MCP Server has been evaluated for the paper [*Agentic DraCor and the Art of Docstring Engineering: Evaluating MCP-empowered LLM Usage of the DraCor API*](http://arxiv.org/abs/2508.13774) presented at the [DraCor Summit 2025](https://summit.dracor.org).
 
 ## License
 

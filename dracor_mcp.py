@@ -3,13 +3,15 @@
 from typing import Dict, List, Optional, Any, Union
 import requests
 from requests.auth import HTTPBasicAuth
-from mcp.server.fastmcp import FastMCP, Context
+# from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import os
 import csv
 from io import StringIO
 from urllib.parse import quote
 from rdflib import Graph, Namespace, URIRef, RDF, RDFS, OWL
 from lxml import etree
+import uvicorn
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
 DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
@@ -18,6 +20,10 @@ DRACOR_EXISTDB_PWD = str(os.environ.get("DRACOR_EXISTDB_PWD", ""))
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL 
 DRACOR_API_BASE_URL = str(os.environ.get("DRACOR_API_BASE_URL", "https://staging.dracor.org/api/v1"))
+
+# Set transporation mode of the MCP server
+# defaults to "streamable-http"
+DRACOR_MCP_TRANSPORT = str(os.environ.get("DRACOR_MCP_TRANSPORT", "streamable-http"))  
 
 # URL to retrieve the DraCor API Ontology
 DRACOR_API_ONTOLOGY_URL = "https://raw.githubusercontent.com/dracor-org/dracor-ontology/refs/heads/main/v1/dracor_api_ontology.ttl"
@@ -36,10 +42,7 @@ DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-front
 DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
 
 # Create the FastMCP server instance
-mcp = FastMCP("DraCor API v1 (dev)", 
-              request_timeout=300)
-# timeout need to be set in the inspector 
-# see https://github.com/modelcontextprotocol/inspector
+mcp = FastMCP("DraCor API v1 (dev)")
 
 
 # Helper function to make API requests
@@ -212,6 +215,24 @@ def get_corpus_metadata(corpus_name: str):
         return {"metadata" : metadata}
     except Exception as e:
         return {"error": str(e)}
+
+@mcp.tool()
+def get_corpus_metadata_csv(corpus_name:str):
+    """Get extended metadata of all plays in a corpus as CSV
+    
+    Data is retrieved from the endpoint /corpora/{corpusname}/metadata/csv
+    As an alternative the data can be retrieved as JSON with the tool `get_corpus_metadata`, or, in batches
+    using `get_corpus_metadata_paged_helper`
+
+    Args:
+        corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
+    """
+    try:
+        metadata = api_get(corpusname=corpus_name, method="metadata/csv", parse_json=False)
+        return metadata
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @mcp.tool()
 def get_play_metadata(corpus_name: str, 
@@ -817,7 +838,7 @@ def get_corpus_metadata_paged_helper(corpus_name:str,
         pagination = {}
         pagination["current_page"] = page
         pagination["items_per_page"] = items_per_page
-        pagination["total_items"] = len(corpus["plays"])
+        pagination["total_items"] = total_items
         pagination["total_pages"] = total_pages
         pagination["next_page"] = page < total_pages
         pagination["previous_page"] = page > 1
@@ -1578,3 +1599,23 @@ def remove_corpus(corpus_name: str):
 ### --------------
 ###   PROMPTS
 ### --------------
+
+
+# This runs the server.
+# Is ignored, when run with fastmcp dracor_mcp.py or fastmcp dev dracor_mcp.py
+# but becomes relevant when run in Docker container
+if __name__ == "__main__":
+    if DRACOR_MCP_TRANSPORT == "sse":
+        mcp.run(transport="sse",
+                host="0.0.0.0",
+                port=8000,
+                path="/sse"
+                )
+    elif DRACOR_MCP_TRANSPORT == "streamable-http":
+        mcp.run(transport="streamable-http",
+                host="0.0.0.0",
+                port=8000,
+                path="/mcp"
+                )
+    elif DRACOR_MCP_TRANSPORT == "stdio":
+        mcp.run(transport="stdio") 
