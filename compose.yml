@@ -1,6 +1,6 @@
 services:
   dracor-mcp:
-    image: "dracor/mcp:v1.0.0-alpha.4"
+    image: "dracor/mcp:v1.0.0-alpha.5"
     environment:
       - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1
       - DRACOR_EXISTDB_ADMIN=admin
