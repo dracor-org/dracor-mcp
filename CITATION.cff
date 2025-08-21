@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "DraCor MCP Server"
+version: "v1.0.0-alpha.2"
+date-released: "2025-05-20"
+url: "https://github.com/dracor-org/dracor-mcp"
+repository-code: "https://github.com/dracor-org/dracor-mcp"
+abstract: "A Model Context Protocol (MCP) server for interacting with the Drama Corpora Project (DraCor). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs."
+license: MIT
+authors:
+  - given-names: "Ingo"
+    family-names: "Börner"
+    email: "boerner@uni-potsdam.de"
+    orcid: "https://orcid.org/0000-0001-8294-2541"
+    affiliation: "University of Potsdam, Germany"
+keywords:
+  - "model context protocol"
+  - "MCP"
+  - "drama analysis"
+  - "literary text analysis"
+  - "character networks"
+  - "DraCor"
+  - "Computational Literary Studies"
+preferred-citation:
+  type: software
+  title: "DraCor MCP Server"
+  version: "v1.0.0-alpha.2"
+  authors:
+    - given-names: "Ingo"
+      family-names: "Börner"
+      orcid: "https://orcid.org/0000-0001-8294-2541"
+      affiliation: "University of Potsdam, Germany"
+  date-released: "2025-05-20"
+  url: "https://github.com/dracor-org/dracor-mcp"
+  repository-code: "https://github.com/dracor-org/dracor-mcp"
