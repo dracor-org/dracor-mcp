@@ -147,7 +147,15 @@ def resource_corpus_registry() -> Dict:
             return {"error" : r.text }
     except Exception as e:
         return {"error" : str(e)}
-    
+
+@mcp.resource("einakter://")
+def resource_einakter_csv() -> str:
+    try: 
+        r = requests.get("https://einakter.dracor.org/data.csv")
+        return r.text
+    except Exception as e:
+        return {"error" : str(e)} 
+
 
 ### --------------
 ###   TOOLS
