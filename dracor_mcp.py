@@ -217,6 +217,24 @@ def get_corpus_metadata(corpus_name: str):
         return {"error": str(e)}
 
 @mcp.tool()
+def get_corpus_metadata_csv(corpus_name:str):
+    """Get extended metadata of all plays in a corpus as CSV
+    
+    Data is retrieved from the endpoint /corpora/{corpusname}/metadata/csv
+    As an alternative the data can be retrieved as JSON with the tool `get_corpus_metadata`, or, in batches
+    using `get_corpus_metadata_paged_helper`
+
+    Args:
+        corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
+    """
+    try:
+        metadata = api_get(corpusname=corpus_name, method="metadata/csv", parse_json=False)
+        return metadata
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
 def get_play_metadata(corpus_name: str, 
                       play_name: str):
     """Get metadata and network metrics of a single play
@@ -820,7 +838,7 @@ def get_corpus_metadata_paged_helper(corpus_name:str,
         pagination = {}
         pagination["current_page"] = page
         pagination["items_per_page"] = items_per_page
-        pagination["total_items"] = len(corpus["plays"])
+        pagination["total_items"] = total_items
         pagination["total_pages"] = total_pages
         pagination["next_page"] = page < total_pages
         pagination["previous_page"] = page > 1
