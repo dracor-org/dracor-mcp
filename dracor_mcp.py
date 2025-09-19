@@ -45,7 +45,7 @@ DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-front
 DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
 
 # Create the FastMCP server instance
-mcp = FastMCP("DraCor API v1 (dev)")
+mcp = FastMCP(f"DraCor API ({DRACOR_API_BASE_URL})")
 
 
 # Helper function to make API requests
