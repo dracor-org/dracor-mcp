@@ -22,7 +22,7 @@ The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so r
 
 ## Configuration (environment variables)
 
-- `DRACOR_API_BASE_URL` — DraCor API base, default `https://staging.dracor.org/api/v1`. Also used to derive the RelaxNG schema URL (`<host>/schema.rng`) and the server name.
+- `DRACOR_API_BASE_URL` — DraCor API base, default `https://staging.dracor.org/api/v1`. Also used in the server name.
 - `DRACOR_MCP_TRANSPORT` — `streamable-http` (default, path `/mcp`), `sse` (path `/sse`), or `stdio`. Only honored in the `if __name__ == "__main__"` block; `fastmcp run`/`fastmcp dev inspector` ignore it.
 - `DRACOR_EXISTDB_ADMIN` / `DRACOR_EXISTDB_PWD` — HTTP Basic credentials for the write/admin tools against a local DraCor eXist-DB instance.
 
@@ -30,7 +30,7 @@ The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so r
 
 - **Request helpers**: `api_request(endpoint, params)` (simple GET + JSON) and `api_get(corpusname, playname, method, parse_json)` which builds `/corpora/{corpus}/plays/{play}/{method}`-style URLs. Some tools call `requests` directly instead. (A TODO notes these should move to PyDraCor-Core.)
 - **Resources**: `corpora://` (via DTS collection) and `registry://` (DraCor registry JSON from GitHub). A templated `corpora://{corpus_name}` resource is commented out because Claude Desktop doesn't support resource templates.
-- **Tools**, grouped by section comments: regular API endpoints; `*_helper` tools that post-process API data (paging, filtering by author/title/year, minimal play lists) to keep responses within LLM context limits; DTS (Distributed Text Services) endpoints; documentation tools that fetch and parse external sources at call time (API ontology TTL via `rdflib`, the DraCor ODD via `lxml`, OpenAPI spec, research.md, RelaxNG validation); and admin tools (`add_corpus`, `add_play_to_corpus`, `remove_*`, `load_corpus_from_repository`) that POST/PUT/DELETE with Basic auth.
+- **Tools**, grouped by section comments: regular API endpoints; `*_helper` tools that post-process API data (paging, filtering by author/title/year, minimal play lists) to keep responses within LLM context limits; DTS (Distributed Text Services) endpoints; documentation tools that fetch and parse external sources at call time (API ontology TTL via `rdflib`, the DraCor ODD via `lxml`, OpenAPI spec, research.md); and admin tools (`add_corpus`, `add_play_to_corpus`, `remove_*`, `load_corpus_from_repository`) that POST/PUT/DELETE with Basic auth.
 - **Conventions**: tools catch exceptions and return `{"error": str(e)}` rather than raising; successful results are usually wrapped in a dict keyed by the data type (e.g. `{"corpus": ...}`).
 
 ## Docstrings are the product
