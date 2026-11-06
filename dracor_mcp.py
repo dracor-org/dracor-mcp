@@ -37,7 +37,47 @@ XML_NAMESPACES = {
 DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-docs/refs/heads/main/doc/research.md"
 
 # Create the FastMCP server instance
-mcp = FastMCP(f"DraCor API ({DRACOR_API_BASE_URL})")
+def get_server_version() -> Optional[str]:
+    """Version of this server from pyproject.toml (next to this file, also in
+    the Docker image), falling back to the installed package metadata."""
+    try:
+        import tomllib
+        pyproject = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "pyproject.toml")
+        with open(pyproject, "rb") as f:
+            return tomllib.load(f)["project"]["version"]
+    except Exception:
+        pass
+    try:
+        from importlib.metadata import version
+        return version("dracor-mcp")
+    except Exception:
+        return None
+
+
+# General description of the server, sent to clients as the MCP "instructions"
+# (see #32). Keep it short: it is part of every session.
+DRACOR_MCP_INSTRUCTIONS = (
+    "DraCor (https://dracor.org) provides TEI-encoded drama corpora in several languages "
+    "(list them with `get_corpora`). It focuses on the dramatic texts: play metadata, "
+    "characters with gender, co-presence networks and network metrics, and the spoken text "
+    "or stage directions of a play, scene or character. "
+    f"The data comes from the DraCor API at {DRACOR_API_BASE_URL}, documented in its "
+    f"OpenAPI specification at {DRACOR_API_BASE_URL}/openapi.yaml. "
+    "Use it for questions that can be looked up or counted in this data, and compute "
+    "answers from the returned values instead of estimating. "
+    "Tools identify plays by corpus name and play name (e.g. `ger` and "
+    "`lessing-emilia-galotti`), not by the DraCor ID (`ger000088`); name the corpus and "
+    "plays your answer is based on. "
+    "If asked what you can do, summarize this scope."
+)
+
+mcp = FastMCP(
+    f"DraCor API ({DRACOR_API_BASE_URL})",
+    instructions=DRACOR_MCP_INSTRUCTIONS,
+    version=get_server_version(),
+    website_url="https://dracor.org",
+)
 
 
 # Helper function to make API requests
