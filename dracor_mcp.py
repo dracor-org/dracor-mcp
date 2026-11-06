@@ -39,7 +39,8 @@ XML_NAMESPACES = {
     'eg': 'http://www.tei-c.org/ns/Examples'
 }
 
-DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-frontend/refs/heads/main/public/doc/research.md"
+# The research list moved from dracor-frontend to dracor-docs (see #17)
+DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-docs/refs/heads/main/doc/research.md"
 
 DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
 
@@ -1421,10 +1422,12 @@ def get_dracor_based_research():
     """Get Research based on DraCor
 
     This tool makes the research listed at https://dracor.org/doc/research available for the LLM to process.
-    It reads the YAML file in the dracor-frontend GitHub Repo
+    It reads the Markdown file doc/research.md in the dracor-docs GitHub repository
+    (https://github.com/dracor-org/dracor-docs).
     """
     try:
         r = requests.get(DRACOR_RESEARCH_URL)
+        r.raise_for_status()
         return r.text
     except Exception as e:
         return {"error": str(e)}
