@@ -284,7 +284,6 @@ The DraCor FastMCP server provides the following tools:
 - `get_table_of_contents_from_odd` - Get table of contents of the DraCor ODD
 - `get_odd_section` - Get a specific section of the ODD documentation
 - `get_tei_element_documentation_from_odd` - Get documentation for a TEI element
-- `get_schematron_rule_to_check_api_feature` - Get Schematron rule for API feature
 
 ### Database Management Tools
 - `add_corpus` - Add a new corpus to a (local) DraCor instance
