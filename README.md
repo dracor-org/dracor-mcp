@@ -154,7 +154,7 @@ Adapt the Claude Desktop configuration:
 }
 ```
 
-You can use the environment variable `DRACOR_MCP_TRANSPORT` to specify the transport option. Values are `streamable-http` and `sse`. The server listens on `0.0.0.0:8000`; use `DRACOR_MCP_HOST` and `DRACOR_MCP_PORT` to change this.
+You can use the environment variable `DRACOR_MCP_TRANSPORT` to specify the transport option. Values are `streamable-http` and `sse`. The server listens on `0.0.0.0:8000`; use `DRACOR_MCP_HTTP_HOST` and `DRACOR_MCP_HTTP_PORT` to change this. When you change the port, change the port mapping as well (e.g. `ports:` in the compose files, `containerPort` and the probes in Kubernetes). Like `DRACOR_MCP_TRANSPORT`, these variables only apply when the server is started with `python dracor_mcp.py`, as in the Docker image; `fastmcp run` and `fastmcp dev inspector` ignore them.
 
 To set the transport mode to sse use the provided compose file `compose.sse.dev.yml` which includes the environtment variable `DRACOR_MCP_TRANSPORT`:
 
@@ -187,7 +187,7 @@ The image runs as the numeric user `10001` in group 0. It also runs under any ot
 docker run --user 1000700000:0 --read-only --tmpfs /tmp -p 8000:8000 dracor/mcp:<version>
 ```
 
-It listens on port 8000 (see `DRACOR_MCP_PORT`). `GET /health` returns `{"status": "ok"}` without calling the DraCor API, so use it for liveness and readiness probes. If the server validates the `Host` header (see `DRACOR_MCP_ALLOWED_HOSTS`), send `Host: localhost` with the probe, because the kubelet uses the pod IP:
+It listens on port 8000 (see `DRACOR_MCP_HTTP_PORT`; don't use `DRACOR_MCP_PORT`, which Kubernetes sets itself for a service named `dracor-mcp`). `GET /health` returns `{"status": "ok"}` without calling the DraCor API, so use it for liveness and readiness probes. If the server validates the `Host` header (see `DRACOR_MCP_ALLOWED_HOSTS`), send `Host: localhost` with the probe, because the kubelet uses the pod IP:
 
 ```yaml
 spec:

@@ -7,10 +7,28 @@ from fastmcp import FastMCP
 import os
 import csv
 import time
+import logging
 from io import StringIO
 from urllib.parse import quote, urlsplit
 from lxml import etree
 import uvicorn
+
+def env_int(name: str, default: int) -> int:
+    """Read an integer setting from the environment
+
+    An empty or invalid value falls back to the default (with a warning for an
+    invalid one) instead of stopping the server at startup.
+    """
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            "Ignoring %s=%r, not an integer; using %s", name, value, default)
+        return default
+
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
 DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
@@ -35,8 +53,7 @@ DRACOR_MCP_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
     "DRACOR_MCP_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 
 # Timeout in seconds for requests to the DraCor API and other sources
-DRACOR_HTTP_TIMEOUT = int(os.environ.get(
-    "DRACOR_HTTP_TIMEOUT", "60"))
+DRACOR_HTTP_TIMEOUT = env_int("DRACOR_HTTP_TIMEOUT", 60)
 
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL
@@ -48,15 +65,17 @@ DRACOR_API_BASE_URL = str(os.environ.get(
 DRACOR_MCP_TRANSPORT = str(os.environ.get(
     "DRACOR_MCP_TRANSPORT", "streamable-http"))
 
-# Address and port the server listens on with the HTTP transports
-DRACOR_MCP_HOST = os.environ.get("DRACOR_MCP_HOST", "0.0.0.0")
-DRACOR_MCP_PORT = int(os.environ.get("DRACOR_MCP_PORT", "8000"))
+# Address and port the server listens on with the HTTP transports. Not named
+# DRACOR_MCP_HOST/_PORT: Kubernetes sets DRACOR_MCP_PORT for a service of that name.
+DRACOR_MCP_HTTP_HOST = os.environ.get("DRACOR_MCP_HTTP_HOST") or "0.0.0.0"
+DRACOR_MCP_HTTP_PORT = env_int("DRACOR_MCP_HTTP_PORT", 8000)
 
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
 
-# The parsed ODD is cached for an hour, so that it is not downloaded for every tool call
-DRACOR_ODD_CACHE_SECONDS = 3600
-_odd_cache = {"root": None, "time": 0}
+# Documents from GitHub (the ODD, the registry) are cached for an hour, so that
+# they are not downloaded for every tool call
+DRACOR_CACHE_SECONDS = 3600
+_cache = {}
 
 XML_NAMESPACES = {
     'tei': 'http://www.tei-c.org/ns/1.0',
@@ -155,6 +174,19 @@ def check_paging(items_per_page: int, page: int, all_at_once: bool = False):
         if all_at_once:
             message += " Set both to 0 to get all items at once."
         raise ValueError(message)
+
+
+def cached(key: str, load):
+    """Return the result of load(), keeping it for DRACOR_CACHE_SECONDS
+
+    Errors are not cached, so a failed download is retried on the next call.
+    """
+    entry = _cache.get(key)
+    if entry is not None and time.monotonic() - entry[0] < DRACOR_CACHE_SECONDS:
+        return entry[1]
+    value = load()
+    _cache[key] = (time.monotonic(), value)
+    return value
 
 
 def path_segment(value) -> str:
@@ -304,8 +336,9 @@ def get_corpus(corpus_name: str):
 def get_corpus_registry():
     """List all corpora registered in the DraCor Registry
 
-    The DraCor Registry (https://github.com/dracor-org/dracor-registry) lists all DraCor corpora, including
-    corpora that are still in development or only planned. Use it to find out which corpora exist or are planned.
+    Data is retrieved from the file corpora.json of the DraCor Registry (https://github.com/dracor-org/dracor-registry)
+    and cached for an hour. The registry lists all DraCor corpora, including corpora that are still in development
+    or only planned. Use it to find out which corpora exist or are planned.
     The tool `get_corpora` lists the corpora that are available in the DraCor instance this server is connected to,
     together with their metrics.
 
@@ -314,9 +347,9 @@ def get_corpus_registry():
     https://staging.dracor.org) or `proposed` (planned or in very early development).
     """
     try:
-        r = http_request("GET", DRACOR_REGISTRY_URL)
-        r.raise_for_status()
-        return {"corpora": r.json()}
+        corpora = cached("registry", lambda: http_request(
+            "GET", DRACOR_REGISTRY_URL).json())
+        return {"corpora": corpora}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1214,20 +1247,15 @@ def get_plaintext_of_citable_unit_via_dts(play_uri: str, ref: str):
 
 def parse_odd_helper():
     """Helper function to parse the ODD from the GitHub Repo"""
-    if _odd_cache["root"] is not None and \
-            time.monotonic() - _odd_cache["time"] < DRACOR_ODD_CACHE_SECONDS:
-        return _odd_cache["root"]
+    def load():
+        # Use a permissive parser to handle potential issues
+        parser = etree.XMLParser(remove_blank_text=True, recover=True)
 
-    # Use a permissive parser to handle potential issues
-    parser = etree.XMLParser(remove_blank_text=True, recover=True)
+        # Fetch and parse the XML
+        r = http_request("GET", DRACOR_ODD_URL)
+        return etree.fromstring(r.content, parser)
 
-    # Fetch and parse the XML
-    r = http_request("GET", DRACOR_ODD_URL)
-    root = etree.fromstring(r.content, parser)
-
-    _odd_cache["root"] = root
-    _odd_cache["time"] = time.monotonic()
-    return root
+    return cached("odd", load)
 
 
 @mcp.tool()
@@ -1570,8 +1598,8 @@ def remove_corpus(corpus_name: str):
 if __name__ == "__main__":
     if DRACOR_MCP_TRANSPORT == "sse":
         mcp.run(transport="sse",
-                host=DRACOR_MCP_HOST,
-                port=DRACOR_MCP_PORT,
+                host=DRACOR_MCP_HTTP_HOST,
+                port=DRACOR_MCP_HTTP_PORT,
                 path="/sse",
                 host_origin_protection=True,
                 allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,
@@ -1579,8 +1607,8 @@ if __name__ == "__main__":
                 )
     elif DRACOR_MCP_TRANSPORT == "streamable-http":
         mcp.run(transport="streamable-http",
-                host=DRACOR_MCP_HOST,
-                port=DRACOR_MCP_PORT,
+                host=DRACOR_MCP_HTTP_HOST,
+                port=DRACOR_MCP_HTTP_PORT,
                 path="/mcp",
                 host_origin_protection=True,
                 allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,
