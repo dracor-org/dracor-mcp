@@ -1,0 +1,94 @@
+name: Draft release
+
+# Bumps the version, tags it and creates a draft release with generated notes.
+# Publishing the draft triggers publish_image_to_dockerhub.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 1.0.0 or 1.1.0-beta.1)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ github.event.inputs.version }}
+
+jobs:
+  # Checked before the tests, so that a wrong branch or version fails fast
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure main branch
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Releases must be made from main" && exit 1
+          fi
+
+      - name: Validate version format
+        run: |
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z][a-zA-Z0-9]*\.[0-9]+)?$'; then
+            echo "Version must be a semantic version (e.g. 1.0.0 or 1.1.0-beta.1)" && exit 1
+          fi
+
+      - name: Ensure the tag does not exist
+        run: |
+          if git ls-remote --exit-code --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "refs/tags/$VERSION"; then
+            echo "Tag $VERSION already exists" && exit 1
+          fi
+
+  test:
+    needs: check
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Same uv as in the Dockerfile, so that re-locking only changes the version
+      - name: Read uv version from the Dockerfile
+        id: uv
+        run: echo "version=$(sed -nE 's|.*ghcr\.io/astral-sh/uv:([0-9.]+).*|\1|p' Dockerfile)" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ steps.uv.outputs.version }}
+
+      # pyproject.toml gets the version as entered (uv version would write
+      # 1.1.0b1 for 1.1.0-beta.1), so that the server reports the same version
+      # as the image tag; uv.lock has the normalized form
+      - name: Bump version
+        run: |
+          sed -i -E "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+          uv lock
+          sed -i -E "s/^( *version: ).*/\1\"$VERSION\"/; s/^( *date-released: ).*/\1\"$(date -u +%F)\"/" CITATION.cff
+          sed -i -E "s|(image: \"dracor/mcp:)[^\"]*\"|\1$VERSION\"|" compose.yml
+          git diff
+
+      # Pushed together, so that main never gets a version commit without its tag
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock CITATION.cff compose.yml
+          git commit -m "Bump version to $VERSION"
+          git tag "$VERSION"
+          git push --atomic origin main "$VERSION"
+
+      - name: Create draft release
+        run: |
+          prerelease=""
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$VERSION" \
+            --draft \
+            --title "$VERSION" \
+            --generate-notes \
+            $prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
