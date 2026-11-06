@@ -10,7 +10,6 @@ from io import StringIO
 from urllib.parse import quote
 from rdflib import Graph, Namespace, URIRef, RDF, RDFS, OWL
 from lxml import etree
-import uvicorn
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
 DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
@@ -1683,16 +1682,22 @@ def remove_corpus(corpus_name: str):
 # but becomes relevant when run in Docker container
 if __name__ == "__main__":
     if DRACOR_MCP_TRANSPORT == "sse":
+        # legacy transport, kept for older clients
         mcp.run(transport="sse",
                 host="0.0.0.0",
                 port=8000,
                 path="/sse"
                 )
-    elif DRACOR_MCP_TRANSPORT == "streamable-http":
-        mcp.run(transport="streamable-http",
+    elif DRACOR_MCP_TRANSPORT in ("streamable-http", "http"):
+        # "http" is FastMCP's name for the streamable HTTP transport
+        mcp.run(transport="http",
                 host="0.0.0.0",
                 port=8000,
                 path="/mcp"
                 )
     elif DRACOR_MCP_TRANSPORT == "stdio":
         mcp.run(transport="stdio")
+    else:
+        raise SystemExit(
+            f"Unknown DRACOR_MCP_TRANSPORT '{DRACOR_MCP_TRANSPORT}'. "
+            "Use one of: streamable-http, http, sse, stdio.")

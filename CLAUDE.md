@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A [FastMCP](https://gofastmcp.com) server (pinned to `fastmcp == 2.11.3`) exposing the DraCor (Drama Corpora Project) API v1 to LLMs. The entire server lives in a single file, `dracor_mcp.py`. There is no test suite, linter config, or CI beyond the Docker image publish workflow.
+A [FastMCP](https://gofastmcp.com) server (pinned to `fastmcp == 4.1.6`) exposing the DraCor (Drama Corpora Project) API v1 to LLMs. The entire server lives in a single file, `dracor_mcp.py`. There is no test suite, linter config, or CI beyond the Docker image publish workflow.
 
 ## Commands
 
 ```sh
 uv venv && source .venv/bin/activate && uv pip install -e .   # set up
-fastmcp dev dracor_mcp.py                                      # MCP Inspector for interactive testing of tools
+fastmcp dev inspector dracor_mcp.py                            # MCP Inspector for interactive testing of tools
 python dracor_mcp.py                                           # run directly (uses DRACOR_MCP_TRANSPORT)
 docker compose -f compose.dev.yml up                           # always rebuilds local dracor/mcp:dev, serves :8000/mcp
 docker compose -f compose.sse.dev.yml up                       # same, with SSE transport on :8000/sse
