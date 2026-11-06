@@ -358,7 +358,7 @@ The DraCor API is publicly accessible, so no authentication is required.
 ## Releasing
 
 1. Go to **Actions → Draft release → Run workflow** on `main` and enter the new version number without a `v` (e.g. `1.0.0`, or `1.1.0-beta.1` for a pre-release)
-2. The workflow runs the image tests, bumps the version in `pyproject.toml`, `uv.lock`, `CITATION.cff` and `compose.yml`, commits to `main`, tags, and opens a draft GitHub release with generated notes
+2. The workflow checks the version, runs the image tests, bumps the version in `pyproject.toml`, `uv.lock`, `CITATION.cff` and `compose.yml`, commits to `main`, tags, and opens a draft GitHub release with generated notes
 3. Edit the release notes and click **Publish release**
 4. Publishing triggers the Docker build and pushes the new image to DockerHub as `dracor/mcp`
 
