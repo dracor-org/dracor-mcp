@@ -250,8 +250,8 @@ def get_corpora():
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora?include=metrics"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"corpora": r.json()}
+        r.raise_for_status()
+        return {"corpora": r.json()}
     except Exception as e:
         return {"error": str(e)}
 
@@ -361,8 +361,8 @@ def get_play_tei(corpus_name: str, play_name: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/tei"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return r.text
+        r.raise_for_status()
+        return r.text
     except Exception as e:
         return {"error": str(e)}
 
@@ -380,8 +380,8 @@ def get_play_plaintext(corpus_name: str, play_name: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/txt"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return r.text
+        r.raise_for_status()
+        return r.text
     except Exception as e:
         return {"error": str(e)}
 
@@ -421,25 +421,25 @@ def get_play_network(corpus_name: str,
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/csv"
         r = http_request("GET", request_url)
 
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            nodes = []
-            edges = []
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                if row[0] not in nodes:
-                    nodes.append(row[0])
-                if row[2] not in nodes:
-                    nodes.append(row[2])
-                # edges properties: Source,Type,Target,Weight
-                item = {}
-                item["source"] = row[0]
-                item["type"] = row[1].lower()
-                item["target"] = row[2]
-                item["weight"] = row[3]
-                edges.append(item)
+        r.raise_for_status()
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        nodes = []
+        edges = []
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            if row[0] not in nodes:
+                nodes.append(row[0])
+            if row[2] not in nodes:
+                nodes.append(row[2])
+            # edges properties: Source,Type,Target,Weight
+            item = {}
+            item["source"] = row[0]
+            item["type"] = row[1].lower()
+            item["target"] = row[2]
+            item["weight"] = row[3]
+            edges.append(item)
 
         return {"nodes": nodes, "edges": edges}
 
@@ -465,22 +465,22 @@ def get_play_character_relations(corpus_name: str, play_name: str):
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/csv"
         r = http_request("GET", request_url)
 
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            relations = []
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                # Source,Type,Target,Label
-                # odoardo,Directed,emilia,parent_of
-                # claudia,Directed,emilia,parent_of
-                item = {}
-                item["source"] = row[0]
-                item["type"] = row[1].lower()
-                item["target"] = row[2]
-                item["label"] = row[3]
-                relations.append(item)
+        r.raise_for_status()
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        relations = []
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            # Source,Type,Target,Label
+            # odoardo,Directed,emilia,parent_of
+            # claudia,Directed,emilia,parent_of
+            item = {}
+            item["source"] = row[0]
+            item["type"] = row[1].lower()
+            item["target"] = row[2]
+            item["label"] = row[3]
+            relations.append(item)
 
         return {"relations": relations}
 
@@ -620,8 +620,8 @@ def get_plays_with_characters_by_wikidata_id(qid: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/character/{path_segment(qid)}"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"plays_with_character": r.json()}
+        r.raise_for_status()
+        return {"plays_with_character": r.json()}
 
     except Exception as e:
         return {"error": str(e)}
@@ -641,8 +641,8 @@ def get_author_info_from_wikidata(qid: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/wikidata/author/{path_segment(qid)}"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"author": r.json()}
+        r.raise_for_status()
+        return {"author": r.json()}
 
     except Exception as e:
         return {"error": str(e)}
@@ -665,21 +665,21 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
         request_url = f"{DRACOR_API_BASE_URL}/wikidata/mixnmatch"
         r = http_request("GET", request_url)
 
+        r.raise_for_status()
         data = []
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                item = {}
-                item["id"] = row[0]
-                item["title"] = row[1].lower()
-                if row[2] == "":
-                    item["q"] = None
-                else:
-                    item["q"] = row[2]
-                data.append(item)
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            item = {}
+            item["id"] = row[0]
+            item["title"] = row[1].lower()
+            if row[2] == "":
+                item["q"] = None
+            else:
+                item["q"] = row[2]
+            data.append(item)
 
         # no batch requested if limit and offset are 0 (default)
         if page == 0 and items_per_page == 0:
@@ -710,7 +710,7 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
             pagination["next_page"] = page < total_pages
             pagination["previous_page"] = page > 1
 
-        return {"pagination": pagination, "data": data}
+        return {"pagination": pagination, "data": result}
 
     except Exception as e:
         return {"error": str(e)}
@@ -770,7 +770,7 @@ def get_links_to_playdata_helper(corpus_name: str, play_name: str):
     urls["download_network_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/gexf"
     urls["download_network_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/graphml"
     urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/gexf"
-    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/graphml"
+    urls["download_character_relation_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/graphml"
 
     return {"urls": urls}
 
@@ -1068,8 +1068,8 @@ def dts_entrypoint():
     """
     try:
         r = http_request("GET", f"{DRACOR_API_BASE_URL}/dts")
-        if r.status_code == 200:
-            return r.json()
+        r.raise_for_status()
+        return r.json()
     except Exception as e:
         return {"error": str(e)}
 
