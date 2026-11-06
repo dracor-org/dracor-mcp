@@ -179,6 +179,49 @@ Change the Claude Desktop configuration:
 }
 ```
 
+### Running on Kubernetes / OpenShift (OKD)
+
+The image runs as the numeric user `10001` in group 0. It also runs under any other UID in group 0, as assigned by OpenShift/OKD; all files belong to group 0 with group permissions equal to the owner's. The server writes nothing at runtime (`HOME` is `/tmp`), so it works with a read-only root filesystem:
+
+```
+docker run --user 1000700000:0 --read-only --tmpfs /tmp -p 8000:8000 dracor/mcp:<version>
+```
+
+It listens on port 8000. `GET /health` returns `{"status": "ok"}` without calling the DraCor API, so use it for liveness and readiness probes. If the server validates the `Host` header (see `DRACOR_MCP_ALLOWED_HOSTS`), send `Host: localhost` with the probe, because the kubelet uses the pod IP:
+
+```yaml
+spec:
+  containers:
+    - name: dracor-mcp
+      image: dracor/mcp:<version>
+      ports:
+        - containerPort: 8000
+      securityContext:
+        runAsNonRoot: true
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+          httpHeaders:
+            - name: Host
+              value: localhost
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8000
+          httpHeaders:
+            - name: Host
+              value: localhost
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir: {}
+```
+
 ## Usage
 
 Once installed in Claude Desktop, you can interact with the DraCor API through Claude. Here are some examples:

@@ -20,11 +20,19 @@ jobs:
       - name: Build image
         run: docker build -t dracor/mcp:test .
 
+      # Run like OpenShift/OKD does: arbitrary UID in group 0, read-only root
+      # filesystem with a writable /tmp
       - name: Start container
-        run: docker run -d --name mcp -p 127.0.0.1:8000:8000 dracor/mcp:test
+        run: >-
+          docker run -d --name mcp -p 127.0.0.1:8000:8000
+          --user 1000700000:0 --read-only --tmpfs /tmp
+          dracor/mcp:test
 
       - name: Smoke test
         run: docker exec -i mcp .venv/bin/python - < test/smoke.py
+
+      - name: Health check
+        run: curl -fsS http://127.0.0.1:8000/health
 
       - name: Show container logs
         if: always()

@@ -207,6 +207,22 @@ def api_get(corpusname: str = None,
             f"Request was not successful. Server returned status code: {str(r.status_code)}")
 
 # --------------
+# HEALTH CHECK
+# --------------
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request):
+    """Liveness/readiness probe for Docker, Kubernetes and OKD.
+
+    Only shows that the server process answers HTTP; it does not call the
+    DraCor API, so a slow API does not get the container restarted.
+    """
+    from starlette.responses import JSONResponse
+    return JSONResponse({"status": "ok"})
+
+
+# --------------
 # TOOLS
 # --------------
 
