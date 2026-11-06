@@ -16,6 +16,7 @@ authors:
     affiliation: "University of Potsdam, Germany"
   - given-names: "Carsten"
     family-names: "Milling"
+    orcid: "https://orcid.org/0000-0003-0553-7512"
 keywords:
   - "model context protocol"
   - "MCP"
@@ -35,6 +36,7 @@ preferred-citation:
       affiliation: "University of Potsdam, Germany"
     - given-names: "Carsten"
       family-names: "Milling"
+      orcid: "https://orcid.org/0000-0003-0553-7512"
   date-released: "2025-05-20"
   url: "https://github.com/dracor-org/dracor-mcp"
   repository-code: "https://github.com/dracor-org/dracor-mcp"
