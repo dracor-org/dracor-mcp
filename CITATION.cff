@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "DraCor MCP Server"
-version: "1.0.0-beta.1"
-date-released: "2025-05-20"
+version: "1.0.0-beta.2"
+date-released: "2026-11-06"
 url: "https://github.com/dracor-org/dracor-mcp"
 repository-code: "https://github.com/dracor-org/dracor-mcp"
 abstract: "A Model Context Protocol (MCP) server for interacting with the Drama Corpora Project (DraCor). This MCP server enables you to seamlessly analyze dramatic texts and their character networks through Claude or other LLMs."
@@ -28,7 +28,7 @@ keywords:
 preferred-citation:
   type: software
   title: "DraCor MCP Server"
-  version: "1.0.0-beta.1"
+  version: "1.0.0-beta.2"
   authors:
     - given-names: "Ingo"
       family-names: "Börner"
@@ -37,7 +37,7 @@ preferred-citation:
     - given-names: "Carsten"
       family-names: "Milling"
       orcid: "https://orcid.org/0000-0003-0553-7512"
-  date-released: "2025-05-20"
+  date-released: "2026-11-06"
   url: "https://github.com/dracor-org/dracor-mcp"
   repository-code: "https://github.com/dracor-org/dracor-mcp"
 references:
