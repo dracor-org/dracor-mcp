@@ -1397,25 +1397,6 @@ def get_tei_element_documentation_from_odd(element_name: str):
 
 
 @mcp.tool()
-def get_schematron_rule_to_check_api_feature(feature_name: str):
-    """Get Schematron rule to check for an DraCor API feature
-
-    In the DraCor schema there are embedded Schematron rules that allow to check if an ecoded TEI-File can be used by the API to retrieve
-    a data value.
-
-    Args:
-        feature_name (str): ID of a DraCor API feature, e.g. play_id
-    """
-    try:
-        root = parse_odd_helper()
-        element = root.xpath(
-            f"//tei:constraintSpec[@ident='{feature_name}'][@type='api_feature_check']", namespaces=XML_NAMESPACES)
-        return etree.tostring(element[0], encoding='unicode', pretty_print=True)
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool()
 def get_dracor_based_research():
     """Get Research based on DraCor
 
