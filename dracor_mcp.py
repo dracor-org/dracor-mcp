@@ -207,51 +207,6 @@ def api_get(corpusname: str = None,
             f"Request was not successful. Server returned status code: {str(r.status_code)}")
 
 # --------------
-# RESOURCES
-# --------------
-
-
-@mcp.resource("corpora://")
-def resource_corpora_via_dts() -> Dict:
-    """List of all available corpora (collections of plays) via DTS Collection endpoint"""
-    try:
-        corpora = api_request("dts/collection")
-        return {"corpora": corpora["member"]}
-    except Exception as e:
-        return {"error": str(e)}
-
-# Will show up as an resource template in the server, but not as a resource,
-# but this does not seem to be supported by
-# by Claude Desktop
-
-
-"""
-@mcp.resource("corpora://{corpus_name}")
-def get_corpus_via_dts(corpus_name: str) -> Dict:
-    #Information about a specific corpus via the DTS endpoint
-    try:
-        corpus = api_request(f"dts/collection?id={corpus_name}")
-        return {"corpus": corpus}
-    except Exception as e:
-        return {"error": str(e)}
-"""
-
-
-@mcp.resource("registry://")
-def resource_corpus_registry() -> Dict:
-    """All DraCor Corpora registered in the DraCor Registry"""
-    try:
-        r = http_request(
-            "GET", "https://raw.githubusercontent.com/dracor-org/dracor-registry/refs/heads/main/corpora.json")
-        if r.status_code == 200:
-            return {"corpora": r.json()}
-        else:
-            return {"error": r.text}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# --------------
 # TOOLS
 # --------------
 

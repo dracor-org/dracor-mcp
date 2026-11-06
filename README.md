@@ -129,7 +129,7 @@ For testing and development:
 fastmcp dev inspector dracor_mcp.py
 ```
 
-This will launch the MCP Inspector where you can test your tools and resources interactively.
+This will launch the MCP Inspector where you can test the tools interactively.
 
 ## Running with Docker
 
@@ -301,7 +301,7 @@ These tools are only available if the environment variable `DRACOR_MCP_ENABLE_AD
 
 ## How It Works
 
-This project uses the official Model Context Protocol Python SDK to build an MCP server that exposes resources and tools that Claude can use to interact with the DraCor API.
+This project uses the official Model Context Protocol Python SDK to build an MCP server that exposes tools that Claude can use to interact with the DraCor API.
 
 When you ask Claude a question about dramatic texts, it can:
 
