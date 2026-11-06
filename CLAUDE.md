@@ -4,23 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A [FastMCP](https://gofastmcp.com) server (pinned to `fastmcp == 2.11.3`) exposing the DraCor (Drama Corpora Project) API v1 to LLMs. The entire server lives in a single file, `dracor_mcp.py`. There is no test suite, linter config, or CI beyond the Docker image publish workflow.
+A [FastMCP](https://gofastmcp.com) server (pinned to `fastmcp == 4.1.6`) exposing the DraCor (Drama Corpora Project) API v1 to LLMs. The entire server lives in a single file, `dracor_mcp.py`. There is no unit test suite or linter config; CI (`.github/workflows/test.yml`) builds the image, runs `test/smoke.py` against it, and builds for arm64.
 
 ## Commands
 
 ```sh
-uv venv && source .venv/bin/activate && uv pip install -e .   # set up
-fastmcp dev dracor_mcp.py                                      # MCP Inspector for interactive testing of tools
+uv sync                                                        # set up .venv from uv.lock (Python from .python-version)
+fastmcp dev inspector dracor_mcp.py                            # MCP Inspector for interactive testing of tools
 python dracor_mcp.py                                           # run directly (uses DRACOR_MCP_TRANSPORT)
 docker compose -f compose.dev.yml up                           # always rebuilds local dracor/mcp:dev, serves :8000/mcp
 docker compose -f compose.sse.dev.yml up                       # same, with SSE transport on :8000/sse
 docker compose up                                              # run published image dracor/mcp:<version>
+python test/smoke.py [URL]                                     # check handshake + registered tools of a running server
 ```
+
+The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so run `uv lock` after changing dependencies in `pyproject.toml`.
 
 ## Configuration (environment variables)
 
 - `DRACOR_API_BASE_URL` — DraCor API base, default `https://staging.dracor.org/api/v1`. Also used to derive the RelaxNG schema URL (`<host>/schema.rng`) and the server name.
-- `DRACOR_MCP_TRANSPORT` — `streamable-http` (default, path `/mcp`), `sse` (path `/sse`), or `stdio`. Only honored in the `if __name__ == "__main__"` block; `fastmcp run`/`fastmcp dev` ignore it.
+- `DRACOR_MCP_TRANSPORT` — `streamable-http` (default, path `/mcp`), `sse` (path `/sse`), or `stdio`. Only honored in the `if __name__ == "__main__"` block; `fastmcp run`/`fastmcp dev inspector` ignore it.
 - `DRACOR_EXISTDB_ADMIN` / `DRACOR_EXISTDB_PWD` — HTTP Basic credentials for the write/admin tools against a local DraCor eXist-DB instance.
 
 ## Architecture of `dracor_mcp.py`
@@ -32,7 +35,7 @@ docker compose up                                              # run published i
 
 ## Docstrings are the product
 
-Tool docstrings are what the LLM sees as the tool description, and the project's evaluation ([arXiv:2508.13774](http://arxiv.org/abs/2508.13774), "Docstring Engineering") centers on them. When adding or editing tools, follow the existing docstring pattern: one-line summary, the source endpoint ("Data is retrieved from the endpoint ..."), pointers to alternative/paged tools when output may be large, and a Google-style `Args:` section with example identifiers (e.g. `ger`, `rus`). Keep the tool list in `README.md` in sync with the tools in the code.
+Tool docstrings are what the LLM sees as the tool description (fastmcp moves the `Args:` section into the per-parameter descriptions of the input schema), and the project's evaluation ([arXiv:2508.13774](http://arxiv.org/abs/2508.13774), "Docstring Engineering") centers on them. When adding or editing tools, follow the existing docstring pattern: one-line summary, the source endpoint ("Data is retrieved from the endpoint ..."), pointers to alternative/paged tools when output may be large, and a Google-style `Args:` section with example identifiers (e.g. `ger`, `rus`). Keep the tool list in `README.md` in sync with the tools in the code.
 
 ## Releases
 

@@ -1,0 +1,49 @@
+name: Test Docker image
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and smoke test the image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image
+        run: docker build -t dracor/mcp:test .
+
+      - name: Start container
+        run: docker run -d --name mcp -p 127.0.0.1:8000:8000 dracor/mcp:test
+
+      - name: Smoke test
+        run: docker exec -i mcp .venv/bin/python - < test/smoke.py
+
+      - name: Show container logs
+        if: always()
+        run: docker logs mcp
+
+  # The release workflow builds arm64 under QEMU on an amd64 runner; do the
+  # same here, without pushing
+  arm64:
+    name: Build the image for arm64 under QEMU
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        run: docker buildx build --platform linux/arm64 .
