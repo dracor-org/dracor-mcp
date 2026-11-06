@@ -4,30 +4,41 @@ from typing import Dict, List, Optional, Any, Union
 import requests
 from requests.auth import HTTPBasicAuth
 from fastmcp import FastMCP
+from fastmcp.utilities.logging import get_logger
 import os
 import csv
 import time
-import logging
+import math
+import threading
 from io import StringIO
 from urllib.parse import quote, urlsplit
 from lxml import etree
 import uvicorn
 
-def env_int(name: str, default: int) -> int:
-    """Read an integer setting from the environment
+logger = get_logger("dracor_mcp")
 
-    An empty or invalid value falls back to the default (with a warning for an
-    invalid one) instead of stopping the server at startup.
+
+def env_number(name: str, default, parse=int):
+    """Read a positive number (e.g. a port or a timeout) from the environment
+
+    An empty value falls back to the default. So does an invalid one (not a
+    number, zero, negative or infinite), with a warning, instead of stopping
+    the server or breaking every request.
     """
     value = os.environ.get(name, "").strip()
     if not value:
         return default
     try:
-        return int(value)
+        number = parse(value)
     except ValueError:
-        logging.getLogger(__name__).warning(
-            "Ignoring %s=%r, not an integer; using %s", name, value, default)
+        number = None
+    # also rejects NaN, which fails every comparison
+    if number is None or not 0 < number < math.inf:
+        kind = "whole number" if parse is int else "number"
+        logger.warning(
+            "Ignoring %s=%r, not a positive %s; using %s", name, value, kind, default)
         return default
+    return number
 
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
@@ -53,7 +64,7 @@ DRACOR_MCP_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
     "DRACOR_MCP_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 
 # Timeout in seconds for requests to the DraCor API and other sources
-DRACOR_HTTP_TIMEOUT = env_int("DRACOR_HTTP_TIMEOUT", 60)
+DRACOR_HTTP_TIMEOUT = env_number("DRACOR_HTTP_TIMEOUT", 60, float)
 
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL
@@ -67,8 +78,9 @@ DRACOR_MCP_TRANSPORT = str(os.environ.get(
 
 # Address and port the server listens on with the HTTP transports. Not named
 # DRACOR_MCP_HOST/_PORT: Kubernetes sets DRACOR_MCP_PORT for a service of that name.
-DRACOR_MCP_HTTP_HOST = os.environ.get("DRACOR_MCP_HTTP_HOST") or "0.0.0.0"
-DRACOR_MCP_HTTP_PORT = env_int("DRACOR_MCP_HTTP_PORT", 8000)
+DRACOR_MCP_HTTP_HOST = os.environ.get(
+    "DRACOR_MCP_HTTP_HOST", "").strip() or "0.0.0.0"
+DRACOR_MCP_HTTP_PORT = env_number("DRACOR_MCP_HTTP_PORT", 8000)
 
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
 
@@ -76,6 +88,7 @@ DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/ref
 # they are not downloaded for every tool call
 DRACOR_CACHE_SECONDS = 3600
 _cache = {}
+_cache_locks = {}
 
 XML_NAMESPACES = {
     'tei': 'http://www.tei-c.org/ns/1.0',
@@ -179,14 +192,24 @@ def check_paging(items_per_page: int, page: int, all_at_once: bool = False):
 def cached(key: str, load):
     """Return the result of load(), keeping it for DRACOR_CACHE_SECONDS
 
-    Errors are not cached, so a failed download is retried on the next call.
+    Errors are not cached, so a failed download is retried on the next call. If
+    an expired copy exists, it is used until the download works again. Calls
+    that arrive at the same time for the same key load it only once.
     """
-    entry = _cache.get(key)
-    if entry is not None and time.monotonic() - entry[0] < DRACOR_CACHE_SECONDS:
-        return entry[1]
-    value = load()
-    _cache[key] = (time.monotonic(), value)
-    return value
+    with _cache_locks.setdefault(key, threading.Lock()):
+        entry = _cache.get(key)
+        if entry is not None and time.monotonic() - entry[0] < DRACOR_CACHE_SECONDS:
+            return entry[1]
+        try:
+            value = load()
+        except Exception as e:
+            if entry is None:
+                raise
+            logger.warning("Could not refresh %s, using the copy from %d minutes ago: %s",
+                           key, (time.monotonic() - entry[0]) // 60, e)
+            return entry[1]
+        _cache[key] = (time.monotonic(), value)
+        return value
 
 
 def path_segment(value) -> str:
@@ -306,6 +329,8 @@ def get_corpora():
     """List all corpora
 
     Data is retrieved from the endpoint /corpora
+    Only corpora loaded into this DraCor instance are included. To find out whether a corpus exists at all, e.g. as
+    a draft or planned corpus, use the tool `get_corpus_registry`.
     """
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora?include=metrics"
