@@ -6,14 +6,37 @@ from requests.auth import HTTPBasicAuth
 from fastmcp import FastMCP
 import os
 import csv
+import time
 from io import StringIO
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from lxml import etree
 import uvicorn
 
 # Admin User and Password of the (local) eXist-DB can be supplied as environment variables
 DRACOR_EXISTDB_ADMIN = str(os.environ.get("DRACOR_EXISTDB_ADMIN", "admin"))
 DRACOR_EXISTDB_PWD = str(os.environ.get("DRACOR_EXISTDB_PWD", ""))
+
+# Tools that write to the database (adding and removing corpora and plays) are
+# only available if DRACOR_MCP_ENABLE_ADMIN_TOOLS is set to "true", e.g. when running
+# the MCP server for a local DraCor instance
+DRACOR_MCP_ENABLE_ADMIN_TOOLS = os.environ.get(
+    "DRACOR_MCP_ENABLE_ADMIN_TOOLS", "").lower() in ("1", "true", "yes")
+
+# Comma separated list of host names accepted in the Host header of HTTP
+# requests, e.g. "dracor.org". localhost is always accepted. This protects
+# against DNS rebinding attacks.
+DRACOR_MCP_ALLOWED_HOSTS = [host.strip() for host in os.environ.get(
+    "DRACOR_MCP_ALLOWED_HOSTS", "").split(",") if host.strip()]
+
+# Comma separated list of origins (e.g. "https://claude.ai") accepted in the
+# Origin header that browser based clients send. Requests without an Origin
+# header are not affected.
+DRACOR_MCP_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "DRACOR_MCP_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+
+# Timeout in seconds for requests to the DraCor API and other sources
+DRACOR_HTTP_TIMEOUT = int(os.environ.get(
+    "DRACOR_HTTP_TIMEOUT", "60"))
 
 # Base API URL for DraCor v1
 # Set the Base URL in the environment variable DRACOR_API_BASE_URL
@@ -26,6 +49,10 @@ DRACOR_MCP_TRANSPORT = str(os.environ.get(
     "DRACOR_MCP_TRANSPORT", "streamable-http"))
 
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
+
+# The parsed ODD is cached for an hour, so that it is not downloaded for every tool call
+DRACOR_ODD_CACHE_SECONDS = 3600
+_odd_cache = {"root": None, "time": 0}
 
 XML_NAMESPACES = {
     'tei': 'http://www.tei-c.org/ns/1.0',
@@ -79,12 +106,41 @@ mcp = FastMCP(
     website_url="https://dracor.org",
 )
 
+if not DRACOR_MCP_ENABLE_ADMIN_TOOLS:
+    mcp.disable(tags={"admin"})
+
+
+def http_request(method: str, url: str, **kwargs) -> requests.Response:
+    """Send an HTTP request with the timeout set in DRACOR_HTTP_TIMEOUT
+
+    A timeout is reported with a message the model can act on.
+    """
+    kwargs.setdefault("timeout", DRACOR_HTTP_TIMEOUT)
+    try:
+        return requests.request(method, url, **kwargs)
+    except requests.Timeout:
+        raise TimeoutError(
+            f"{urlsplit(url).hostname} did not respond within {kwargs['timeout']} seconds. "
+            "Tell the user, and retry later or with a narrower request.") from None
+
+
+def path_segment(value) -> str:
+    """Encode a value (e.g. a corpus name) as a single segment of a URL path
+
+    This makes sure that values passed to the tools can not change the path of
+    the request, e.g. with "../" or "?".
+    """
+    segment = quote(str(value), safe="")
+    if segment in (".", ".."):
+        raise ValueError(f"Invalid identifier: {value}")
+    return segment
+
 
 # Helper function to make API requests
 def api_request(endpoint: str, params: Optional[Dict] = None) -> Any:
     """Make a request to the DraCor API v1."""
     url = f"{DRACOR_API_BASE_URL}/{endpoint}"
-    response = requests.get(url, params=params)
+    response = http_request("GET", url, params=params)
     response.raise_for_status()
     return response.json()
 
@@ -110,6 +166,11 @@ def api_get(corpusname: str = None,
         if apibase.endswith("/"):
             apibase = apibase[:-1]
 
+    if corpusname is not None:
+        corpusname = path_segment(corpusname)
+    if playname is not None:
+        playname = path_segment(playname)
+
     # Both parameters corpusname an playname are supplied
     if corpusname is not None and playname is not None:
         # used for /api/corpora/{corpusname}/plays/{playname}/
@@ -134,7 +195,7 @@ def api_get(corpusname: str = None,
         request_url = f"{apibase}/info"
 
     # send the response
-    r = requests.get(request_url)
+    r = http_request("GET", request_url)
     if r.status_code == 200:
         # successful request, decide if response need to be parsed
         if parse_json is True:
@@ -180,8 +241,8 @@ def get_corpus_via_dts(corpus_name: str) -> Dict:
 def resource_corpus_registry() -> Dict:
     """All DraCor Corpora registered in the DraCor Registry"""
     try:
-        r = requests.get(
-            "https://raw.githubusercontent.com/dracor-org/dracor-registry/refs/heads/main/corpora.json")
+        r = http_request(
+            "GET", "https://raw.githubusercontent.com/dracor-org/dracor-registry/refs/heads/main/corpora.json")
         if r.status_code == 200:
             return {"corpora": r.json()}
         else:
@@ -217,7 +278,7 @@ def get_corpora():
     """
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora?include=metrics"
-        r = requests.get(request_url)
+        r = http_request("GET", request_url)
         if r.status_code == 200:
             return {"corpora": r.json()}
     except Exception as e:
@@ -235,7 +296,7 @@ def get_corpus(corpus_name: str):
         corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
     """
     try:
-        corpus = api_request(f"corpora/{corpus_name}")
+        corpus = api_request(f"corpora/{path_segment(corpus_name)}")
         return {"corpus": corpus}
     except Exception as e:
         return {"error": str(e)}
@@ -327,8 +388,8 @@ def get_play_tei(corpus_name: str, play_name: str):
         play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/tei"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/tei"
+        r = http_request("GET", request_url)
         if r.status_code == 200:
             return r.text
     except Exception as e:
@@ -346,8 +407,8 @@ def get_play_plaintext(corpus_name: str, play_name: str):
         play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/txt"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/txt"
+        r = http_request("GET", request_url)
         if r.status_code == 200:
             return r.text
     except Exception as e:
@@ -386,8 +447,8 @@ def get_play_network(corpus_name: str,
         play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/networkdata/csv"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/csv"
+        r = http_request("GET", request_url)
 
         if r.status_code == 200:
             csv_filelike = StringIO(r.text)
@@ -430,8 +491,8 @@ def get_play_character_relations(corpus_name: str, play_name: str):
         play_name (str): Identifier (play_name) of a play in a corpus, e.g. `lessing-emilia-galotti`, `gogol-revizor`
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/relations/csv"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/csv"
+        r = http_request("GET", request_url)
 
         if r.status_code == 200:
             csv_filelike = StringIO(r.text)
@@ -477,24 +538,9 @@ def get_spoken_text(corpus_name: str,
         role (str): Filter spoken text by role of a character
     """
     try:
-        if gender is not None and relation is not None and role is not None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?gender={gender}&relation={relation}&role={role}"
-        elif gender is None and relation is not None and role is not None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?relation={relation}&role={role}"
-        elif gender is None and relation is None and role is not None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?role={role}"
-        elif gender is not None and relation is None and role is not None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?gender={gender}&role={role}"
-        elif gender is not None and relation is not None and role is None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?gender={gender}&relation={relation}"
-        elif gender is not None and relation is None and role is None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?gender={gender}"
-        elif gender is None and relation is not None and role is None:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text?relation={relation}"
-        else:
-            request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/spoken-text"
-
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/spoken-text"
+        params = {"gender": gender, "relation": relation, "role": role}
+        r = http_request("GET", request_url, params=params)
         spoken_text = r.text
         return {"text": spoken_text}
     except Exception as e:
@@ -601,8 +647,8 @@ def get_plays_with_characters_by_wikidata_id(qid: str):
         qid (str): Wikidata-ID / Q-Number, e.g. Q131412
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/character/{qid}"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/character/{path_segment(qid)}"
+        r = http_request("GET", request_url)
         if r.status_code == 200:
             return {"plays_with_character": r.json()}
 
@@ -622,8 +668,8 @@ def get_author_info_from_wikidata(qid: str):
         qid (str): Wikidata-ID / Q-Number, e.g. Q34628
     """
     try:
-        request_url = f"{DRACOR_API_BASE_URL}/wikidata/author/{qid}"
-        r = requests.get(request_url)
+        request_url = f"{DRACOR_API_BASE_URL}/wikidata/author/{path_segment(qid)}"
+        r = http_request("GET", request_url)
         if r.status_code == 200:
             return {"author": r.json()}
 
@@ -646,7 +692,7 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
     """
     try:
         request_url = f"{DRACOR_API_BASE_URL}/wikidata/mixnmatch"
-        r = requests.get(request_url)
+        r = http_request("GET", request_url)
 
         data = []
         if r.status_code == 200:
@@ -717,15 +763,15 @@ def get_links_to_playdata_helper(corpus_name: str, play_name: str):
     dracor_frontend_base = DRACOR_API_BASE_URL.split("/api/")[0]
 
     urls = {}
-    urls["frontend_network_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}"
-    urls["frontend_speech_distribution_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#speech"
-    urls["frontend_fulltext_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#text"
-    urls["frontend_download_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#downloads"
-    urls["frontend_tools_tab"] = f"{dracor_frontend_base}/{corpus_name}/{play_name}#tools"
+    urls["frontend_network_tab"] = f"{dracor_frontend_base}/{path_segment(corpus_name)}/{path_segment(play_name)}"
+    urls["frontend_speech_distribution_tab"] = f"{dracor_frontend_base}/{path_segment(corpus_name)}/{path_segment(play_name)}#speech"
+    urls["frontend_fulltext_tab"] = f"{dracor_frontend_base}/{path_segment(corpus_name)}/{path_segment(play_name)}#text"
+    urls["frontend_download_tab"] = f"{dracor_frontend_base}/{path_segment(corpus_name)}/{path_segment(play_name)}#downloads"
+    urls["frontend_tools_tab"] = f"{dracor_frontend_base}/{path_segment(corpus_name)}/{path_segment(play_name)}#tools"
 
     # need to encode the url to retrieve the data for the clarin tool
     quoted_play_url = quote(
-        f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/", safe='')
+        f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/", safe='')
 
     # CLARIN Language Resource Switchboard
     urls[
@@ -750,10 +796,10 @@ def get_links_to_playdata_helper(corpus_name: str, play_name: str):
     urls["frontend_tools_tab_to_gephi"] = f"https://gephi.org/gephi-lite/?file={quoted_play_url}networkdata/gexf"
 
     # Download Tab Formats
-    urls["download_network_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/networkdata/gexf"
-    urls["download_network_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/networkdata/graphml"
-    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/relations/gexf"
-    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/relations/graphml"
+    urls["download_network_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/gexf"
+    urls["download_network_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/graphml"
+    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/gexf"
+    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/graphml"
 
     return {"urls": urls}
 
@@ -1050,7 +1096,7 @@ def dts_entrypoint():
     provides URI Templates  as defined in RFC 6570 to the other DTS endpoint (Collection, Navigation, Document).
     """
     try:
-        r = requests.get(f"{DRACOR_API_BASE_URL}/dts")
+        r = http_request("GET", f"{DRACOR_API_BASE_URL}/dts")
         if r.status_code == 200:
             return r.json()
     except Exception as e:
@@ -1075,7 +1121,7 @@ def get_corpus_via_dts(corpus_name: str):
         corpus_name (str): Identifier/URI of the corpus, e.g. `https://staging.dracor.org/id/ger` or `ger`
     """
     try:
-        corpus = api_request(f"dts/collection?id={corpus_name}")
+        corpus = api_request("dts/collection", {"id": corpus_name})
         return {"corpus": corpus}
     except Exception as e:
         return {"error": str(e)}
@@ -1091,7 +1137,7 @@ def get_play_via_dts(play_uri: str):
         play_uri (str): Identifier/URI of the play, e.g. `https://staging.dracor.org/id/ger000088`
     """
     try:
-        play = api_request(f"dts/collection?id={play_uri}")
+        play = api_request("dts/collection", {"id": play_uri})
         return {"play": play}
     except Exception as e:
         return {"error": str(e)}
@@ -1118,15 +1164,10 @@ def get_citable_units_via_dts(
     """
     try:
 
-        if ref and down:
-            response = api_request(
-                f"dts/navigation?resource={play_uri}&ref={ref}&down={down}")
-        elif ref and not down:
-            response = api_request(
-                f"dts/navigation?resource={play_uri}&ref={ref}&down=-1")
-        else:
-            response = api_request(
-                f"dts/navigation?resource={play_uri}&down=-1")
+        # "down" is only used together with "ref", otherwise everything is returned
+        params = {"resource": play_uri, "ref": ref,
+                  "down": down if ref and down else "-1"}
+        response = api_request("dts/navigation", params)
 
         return {"citeable_units": response["member"]}
     except Exception as e:
@@ -1144,8 +1185,10 @@ def get_plaintext_of_citable_unit_via_dts(play_uri: str, ref: str):
         ref (str): Fragment identifier, e.g of the first scene of the second act `body/div[2]/div[1]`
     """
     try:
-        response = requests.get(
-            f"{DRACOR_API_BASE_URL}/dts/document?resource={play_uri}&ref={ref}&mediaType=text/plain")
+        response = http_request(
+            "GET", f"{DRACOR_API_BASE_URL}/dts/document",
+            params={"resource": play_uri, "ref": ref,
+                    "mediaType": "text/plain"})
         return {"text": response.text}
     except Exception as e:
         return {"error": str(e)}
@@ -1155,13 +1198,20 @@ def get_plaintext_of_citable_unit_via_dts(play_uri: str, ref: str):
 
 def parse_odd_helper():
     """Helper function to parse the ODD from the GitHub Repo"""
+    if _odd_cache["root"] is not None and \
+            time.monotonic() - _odd_cache["time"] < DRACOR_ODD_CACHE_SECONDS:
+        return _odd_cache["root"]
+
     # Use a permissive parser to handle potential issues
     parser = etree.XMLParser(remove_blank_text=True, recover=True)
 
     # Fetch and parse the XML
-    r = requests.get(DRACOR_ODD_URL)
+    r = http_request("GET", DRACOR_ODD_URL)
+    r.raise_for_status()
     root = etree.fromstring(r.content, parser)
 
+    _odd_cache["root"] = root
+    _odd_cache["time"] = time.monotonic()
     return root
 
 
@@ -1252,7 +1302,7 @@ def get_odd_section(section_id: str):
     try:
         root = parse_odd_helper()
         element = root.xpath(
-            f"//*[@xml:id='{section_id}']", namespaces=XML_NAMESPACES)
+            "//*[@xml:id=$id]", id=section_id, namespaces=XML_NAMESPACES)
         return etree.tostring(element[0], encoding='unicode', pretty_print=True)
 
     except Exception as e:
@@ -1269,7 +1319,7 @@ def get_tei_element_documentation_from_odd(element_name: str):
     try:
         root = parse_odd_helper()
         element = root.xpath(
-            f"//tei:elementSpec[@ident='{element_name}']", namespaces=XML_NAMESPACES)
+            "//tei:elementSpec[@ident=$name]", name=element_name, namespaces=XML_NAMESPACES)
         return etree.tostring(element[0], encoding='unicode', pretty_print=True)
     except Exception as e:
         return {"error": str(e)}
@@ -1284,7 +1334,7 @@ def get_dracor_based_research():
     (https://github.com/dracor-org/dracor-docs).
     """
     try:
-        r = requests.get(DRACOR_RESEARCH_URL)
+        r = http_request("GET", DRACOR_RESEARCH_URL)
         r.raise_for_status()
         return r.text
     except Exception as e:
@@ -1300,7 +1350,7 @@ def get_readme_form_dracor_api_github_repo():
     """
     try:
         request_url = "https://raw.githubusercontent.com/dracor-org/dracor-api/refs/heads/main/README.md"
-        r = requests.get(request_url)
+        r = http_request("GET", request_url)
         return r.text
     except Exception as e:
         return {"error": str(e)}
@@ -1309,7 +1359,7 @@ def get_readme_form_dracor_api_github_repo():
 # Admin functions (for local instances)
 
 
-@mcp.tool()
+@mcp.tool(tags={"admin"})
 def add_corpus(corpus_metadata: dict):
     """Add a corpus
 
@@ -1325,7 +1375,7 @@ def add_corpus(corpus_metadata: dict):
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
         request_url = f"{DRACOR_API_BASE_URL}/corpora"
-        r = requests.post(request_url, json=corpus_metadata, auth=credentials)
+        r = http_request("POST", request_url, json=corpus_metadata, auth=credentials)
         if r.status_code == 200 or r.status_code == 201:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1343,7 +1393,7 @@ def add_corpus(corpus_metadata: dict):
         return {"error": str(e)}
 
 
-@mcp.tool()
+@mcp.tool(tags={"admin"})
 def load_corpus_from_repository(corpus_name: str):
     """Load corpus from GitHub Repository
 
@@ -1356,9 +1406,9 @@ def load_corpus_from_repository(corpus_name: str):
     """
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
-        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}"
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}"
         payload = {"load": True}
-        r = requests.post(request_url, json=payload, auth=credentials)
+        r = http_request("POST", request_url, json=payload, auth=credentials)
         if r.status_code == 202:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1383,7 +1433,7 @@ def load_corpus_from_repository(corpus_name: str):
         return {"error": str(e)}
 
 
-@mcp.tool()
+@mcp.tool(tags={"admin"})
 def add_play_to_corpus(corpus_name: str, play_name: str, tei: str):
     """Add play
 
@@ -1397,12 +1447,12 @@ def add_play_to_corpus(corpus_name: str, play_name: str, tei: str):
     """
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
-        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}/tei"
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/tei"
         headers = {"Content-Type": "application/xml"}
 
         # should TEI file be parsed and validated?
 
-        r = requests.put(request_url, data=tei,
+        r = http_request("PUT", request_url, data=tei,
                          headers=headers, auth=credentials)
         if r.status_code == 200:
             return {"status": "Success",
@@ -1425,7 +1475,7 @@ def add_play_to_corpus(corpus_name: str, play_name: str, tei: str):
         return {"error": str(e)}
 
 
-@mcp.tool()
+@mcp.tool(tags={"admin"})
 def remove_play_from_corpus(corpus_name: str, play_name: str):
     """Remove play from corpus
 
@@ -1439,8 +1489,8 @@ def remove_play_from_corpus(corpus_name: str, play_name: str):
     """
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
-        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}/plays/{play_name}"
-        r = requests.delete(request_url, auth=credentials)
+        request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}"
+        r = http_request("DELETE", request_url, auth=credentials)
         if r.status_code == 200:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1459,7 +1509,7 @@ def remove_play_from_corpus(corpus_name: str, play_name: str):
         return {"error": str(e)}
 
 
-@mcp.tool()
+@mcp.tool(tags={"admin"})
 def remove_corpus(corpus_name: str):
     """Remove corpus
 
@@ -1472,8 +1522,8 @@ def remove_corpus(corpus_name: str):
     """
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
-        request_url = f"{DRACOR_API_BASE_URL}/corpora/{corpus_name}"
-        r = requests.delete(request_url, auth=credentials)
+        request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}"
+        r = http_request("DELETE", request_url, auth=credentials)
         if r.status_code == 200:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1503,13 +1553,19 @@ if __name__ == "__main__":
         mcp.run(transport="sse",
                 host="0.0.0.0",
                 port=8000,
-                path="/sse"
+                path="/sse",
+                host_origin_protection=True,
+                allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,
+                allowed_origins=DRACOR_MCP_ALLOWED_ORIGINS
                 )
     elif DRACOR_MCP_TRANSPORT == "streamable-http":
         mcp.run(transport="streamable-http",
                 host="0.0.0.0",
                 port=8000,
-                path="/mcp"
+                path="/mcp",
+                host_origin_protection=True,
+                allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,
+                allowed_origins=DRACOR_MCP_ALLOWED_ORIGINS
                 )
     elif DRACOR_MCP_TRANSPORT == "stdio":
         mcp.run(transport="stdio")

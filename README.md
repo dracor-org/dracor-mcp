@@ -108,15 +108,18 @@ If you want to use a different server, e.g. the staging server, change it in the
   }
 ```
 
-If running DraCor locally you can set the admin user of the eXist-DB and the password by adding the environment variables `DRACOR_EXISTDB_ADMIN` and `DRACOR_EXISTDB_PWD`:
+If running DraCor locally you can enable the [database management tools](#database-management-tools) with the environment variable `DRACOR_MCP_ENABLE_ADMIN_TOOLS` and set the admin user of the eXist-DB and the password with `DRACOR_EXISTDB_ADMIN` and `DRACOR_EXISTDB_PWD`:
 
 ```json
 "env": {
   "DRACOR_API_BASE_URL": "http://localhost:8088/api/v1",
+  "DRACOR_MCP_ENABLE_ADMIN_TOOLS": "true",
   "DRACOR_EXISTDB_ADMIN": "admin",
   "DRACOR_EXISTDB_PWD": ""
   }
 ```
+
+Never enable these tools on a publicly reachable MCP server: anyone who can connect to it could change the database with the configured credentials.
 
 ### Development Mode
 
@@ -158,6 +161,10 @@ To set the transport mode to sse use the provided compose file `compose.sse.dev.
 ```
 docker compose -f compose.sse.dev.yml up 
 ```
+
+To protect against DNS rebinding attacks, the server only accepts requests with `localhost` in the `Host` header. When running it under another host name, e.g. behind a reverse proxy, list the accepted host names in `DRACOR_MCP_ALLOWED_HOSTS` (comma separated, e.g. `dracor.org`). Requests from browser based clients that send an `Origin` header from a different site are rejected, unless the origin is listed in `DRACOR_MCP_ALLOWED_ORIGINS` (e.g. `https://claude.ai`).
+
+Requests to the DraCor API and other sources time out after 60 seconds. Use `DRACOR_HTTP_TIMEOUT` to change this.
 
 Change the Claude Desktop configuration:
 
@@ -283,6 +290,9 @@ The DraCor FastMCP server provides the following tools:
 - `get_tei_element_documentation_from_odd` - Get documentation for a TEI element
 
 ### Database Management Tools
+
+These tools are only available if the environment variable `DRACOR_MCP_ENABLE_ADMIN_TOOLS` is set to `true` (see [Setup](#setup)).
+
 - `add_corpus` - Add a new corpus to a (local) DraCor instance
 - `load_corpus_from_repository` - Load plays from a GitHub repository into a (local) DraCor instance
 - `add_play_to_corpus` - Add a TEI-file of a play to a corpus in a (local) DraCor instance
