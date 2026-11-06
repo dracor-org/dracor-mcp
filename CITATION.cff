@@ -34,3 +34,31 @@ preferred-citation:
   date-released: "2025-05-20"
   url: "https://github.com/dracor-org/dracor-mcp"
   repository-code: "https://github.com/dracor-org/dracor-mcp"
+references:
+  - type: article
+    title: "Agentic DraCor and the Art of Docstring Engineering: Evaluating MCP-empowered LLM Usage of the DraCor API"
+    authors:
+      - given-names: "Peer"
+        family-names: "Trilcke"
+      - given-names: "Ingo"
+        family-names: "Börner"
+        orcid: "https://orcid.org/0000-0001-8294-2541"
+      - given-names: "Henny"
+        family-names: "Sluyter-Gäthje"
+      - given-names: "Daniil"
+        family-names: "Skorinkin"
+      - given-names: "Frank"
+        family-names: "Fischer"
+      - given-names: "Carsten"
+        family-names: "Milling"
+    year: 2025
+    date-published: "2025-08-19"
+    publisher:
+      name: "arXiv"
+    identifiers:
+      - type: other
+        value: "arXiv:2508.13774"
+        description: "arXiv identifier"
+      - type: doi
+        value: "10.48550/arXiv.2508.13774"
+    url: "https://arxiv.org/abs/2508.13774"
