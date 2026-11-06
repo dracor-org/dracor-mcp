@@ -16,7 +16,8 @@ from fastmcp import Client
 URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000/mcp"
 
 EXPECTED_TOOLS = {"get_api_info", "get_corpora", "get_play_metadata",
-                  "get_play_network", "get_citable_units_via_dts"}
+                  "get_play_network", "get_citable_units_via_dts",
+                  "get_corpus_registry"}
 
 
 async def main():
