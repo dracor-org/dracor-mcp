@@ -18,7 +18,7 @@ This version of the DraCor MCP Server has been tested with *Claude Desktop for M
   - Stage Directions
   - Full text retrieval in plain text and TEI XML format
   - Granular Access to segments of a play via DTS (Distributed Text Services) API
-  - Access to DraCor's documentation (ODD, OpenAPI, API Features Ontology)
+  - Access to the documentation of the DraCor TEI schema (ODD)
 
 ## Setup
 
@@ -230,9 +230,6 @@ The DraCor FastMCP server provides the following tools:
 
 ### API Information
 - `get_api_info` - Get general information about the DraCor API
-- `get_api_feature_list` - Get a list of supported API features
-- `get_api_feature` - Get description of a specific API feature
-- `get_openapi_specification` - Get the complete OpenAPI Specification
 
 ### Corpora
 - `get_corpora` - List all available drama corpora

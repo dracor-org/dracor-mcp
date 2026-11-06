@@ -8,7 +8,6 @@ import os
 import csv
 from io import StringIO
 from urllib.parse import quote
-from rdflib import Graph, Namespace, URIRef, RDF, RDFS, OWL
 from lxml import etree
 import uvicorn
 
@@ -25,11 +24,6 @@ DRACOR_API_BASE_URL = str(os.environ.get(
 # defaults to "streamable-http"
 DRACOR_MCP_TRANSPORT = str(os.environ.get(
     "DRACOR_MCP_TRANSPORT", "streamable-http"))
-
-# URL to retrieve the DraCor API Ontology
-DRACOR_API_ONTOLOGY_URL = "https://raw.githubusercontent.com/dracor-org/dracor-ontology/refs/heads/main/v1/dracor_api_ontology.ttl"
-DRACOR_API_ONTOLOGY_NAMESPACE = Namespace(
-    "https://dracor.org/ontology/dracor-api/v1/")
 
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
 
@@ -1117,161 +1111,6 @@ def get_plaintext_of_citable_unit_via_dts(play_uri: str, ref: str):
         return {"error": str(e)}
 
 # Documentation Tools
-
-
-def parse_property_info_helper(ontology, prop, NS):
-    """
-    Parse information about a specific property from the graph.
-
-    Args:
-        ontology (Graph): RDF graph containing the DraCor API ontolgoy
-        prop (URIRef): URI reference to the property
-        NS (Namespace): DraCor API Namespace namespace
-
-    Returns:
-        dict: Dictionary containing the property's information
-    """
-    prop_info = {
-        "uri": prop,
-        "name": prop.split("/")[-1]
-    }
-
-    # Get rdfs:domain
-    domains = list(ontology.objects(prop, RDFS.domain))
-    prop_info["domain"] = [str(d) for d in domains] if domains else None
-
-    # Get rdfs:range
-    ranges = list(ontology.objects(prop, RDFS.range))
-    prop_info["range"] = [str(r) for r in ranges] if ranges else None
-
-    # Get rdfs:label
-    labels = list(ontology.objects(prop, RDFS.label))
-    prop_info["label"] = str(labels[0]) if labels else None
-
-    # Get rdfs:comment
-    comments = list(ontology.objects(prop, RDFS.comment))
-    prop_info["comment"] = str(comments[0]) if comments else None
-
-    # Get DraCor-specific properties
-    feature_ids = list(ontology.objects(prop, NS.feature_id))
-    prop_info["feature_id"] = str(feature_ids[0]) if feature_ids else None
-
-    feature_names = list(ontology.objects(prop, NS.feature_name))
-    prop_info["feature_name"] = str(
-        feature_names[0]) if feature_names else None
-
-    extractors_module = list(ontology.objects(
-        prop, NS.extractor_in_api_module))
-    prop_info["extractor_in_api_module"] = str(
-        extractors_module[0]) if extractors_module else None
-
-    extractors_function = list(ontology.objects(
-        prop, NS.extractor_in_api_function))
-    prop_info["extractor_in_api_function"] = str(
-        extractors_function[0]) if extractors_function else None
-
-    code_refs = list(ontology.objects(prop, NS.code_ref))
-    prop_info["code_ref"] = [str(c) for c in code_refs] if code_refs else None
-
-    xpaths = list(ontology.objects(prop, NS.xpath))
-    prop_info["xpath"] = str(xpaths[0]) if xpaths else None
-
-    operation_ids = list(ontology.objects(prop, NS.operation_id))
-    prop_info["operation_id"] = [
-        str(o) for o in operation_ids] if operation_ids else None
-
-    field_keys = list(ontology.objects(prop, NS.field_key))
-    prop_info["field_key"] = [str(k)
-                              for k in field_keys] if field_keys else None
-
-    return prop_info
-
-
-@mcp.tool()
-def get_api_feature_list():
-    """Get a list of API features
-
-    Parses the DraCor API Ontolgy and retuns a list of supported API features – types of data included in the API responses
-
-    """
-    try:
-        ontology = Graph()
-        ontology.parse(DRACOR_API_ONTOLOGY_URL)
-
-        # Define namespaces
-        DRACOR = DRACOR_API_ONTOLOGY_NAMESPACE
-
-        # Find all properties in the graph
-        properties = []
-
-        # Look for owl:DatatypeProperty and rdf:Property
-        for prop in ontology.subjects(RDF.type, OWL.DatatypeProperty):
-            if (prop, RDF.type, URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#Property")) in ontology:
-                properties.append(
-                    parse_property_info_helper(ontology, prop, DRACOR))
-
-        # Also search for any that are just rdf:Property but not owl:DatatypeProperty
-        for prop in ontology.subjects(RDF.type, RDF.Property):
-            if prop not in [p["uri"] for p in properties]:
-                properties.append(
-                    parse_property_info_helper(ontology, prop, DRACOR))
-
-        result = []
-        # Build a reduced list
-        for prop in properties:
-
-            # only include properties that have a feature name (might be problematic, but will see)
-            if prop["feature_name"]:
-                item = {}
-                item["feature_name"] = prop["feature_name"]
-                item["uri"] = prop["uri"]
-                item["comment"] = prop["comment"]
-                result.append(item)
-
-        return {"features": result}
-
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool()
-def get_api_feature(feature_name: str):
-    """Get description of an API feature
-
-    Parses the DraCor API Ontolgy and retuns the data on a single API feature
-
-    Args:
-        feature_name (str): Name of the feature, e.g. play_name, corpus_num_of_characters_male
-    """
-    try:
-        ontology = Graph()
-        ontology.parse(DRACOR_API_ONTOLOGY_URL)
-        prop = URIRef(DRACOR_API_ONTOLOGY_NAMESPACE + feature_name)
-        prop_data = parse_property_info_helper(
-            ontology, prop, DRACOR_API_ONTOLOGY_NAMESPACE)
-        return prop_data
-
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool()
-def get_openapi_specification():
-    """Get the OpenAPI Specification of the DraCor API
-
-    Returns the YAML file of the OpenAPI Specification
-
-    """
-    try:
-        r = requests.get(f"{DRACOR_API_BASE_URL}/info")
-        info = r.json()
-        open_api_url = info["openapi"]
-
-        r = requests.get(open_api_url)
-        return r.text
-
-    except Exception as e:
-        return {"error": str(e)}
 
 
 def parse_odd_helper():
