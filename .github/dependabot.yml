@@ -16,3 +16,10 @@ updates:
   directory: /
   schedule:
     interval: monthly
+  ignore:
+  # stay on the Python minor version of .python-version and uv.lock (3.13);
+  # moving to a new one is done by hand
+  - dependency-name: python
+    update-types:
+    - version-update:semver-major
+    - version-update:semver-minor

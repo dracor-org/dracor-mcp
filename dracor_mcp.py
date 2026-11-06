@@ -18,12 +18,12 @@ import uvicorn
 logger = get_logger("dracor_mcp")
 
 
-def env_number(name: str, default, parse=int):
+def env_number(name: str, default, parse=int, maximum=math.inf):
     """Read a positive number (e.g. a port or a timeout) from the environment
 
     An empty value falls back to the default. So does an invalid one (not a
-    number, zero, negative or infinite), with a warning, instead of stopping
-    the server or breaking every request.
+    number, zero, negative, infinite or above the maximum), with a warning,
+    instead of stopping the server or breaking every request.
     """
     value = os.environ.get(name, "").strip()
     if not value:
@@ -33,8 +33,10 @@ def env_number(name: str, default, parse=int):
     except ValueError:
         number = None
     # also rejects NaN, which fails every comparison
-    if number is None or not 0 < number < math.inf:
+    if number is None or not 0 < number < math.inf or number > maximum:
         kind = "whole number" if parse is int else "number"
+        if maximum < math.inf:
+            kind += f" up to {maximum}"
         logger.warning(
             "Ignoring %s=%r, not a positive %s; using %s", name, value, kind, default)
         return default
@@ -80,15 +82,18 @@ DRACOR_MCP_TRANSPORT = str(os.environ.get(
 # DRACOR_MCP_HOST/_PORT: Kubernetes sets DRACOR_MCP_PORT for a service of that name.
 DRACOR_MCP_HTTP_HOST = os.environ.get(
     "DRACOR_MCP_HTTP_HOST", "").strip() or "0.0.0.0"
-DRACOR_MCP_HTTP_PORT = env_number("DRACOR_MCP_HTTP_PORT", 8000)
+DRACOR_MCP_HTTP_PORT = env_number("DRACOR_MCP_HTTP_PORT", 8000, maximum=65535)
 
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
 
-# Documents from GitHub (the ODD, the registry) are cached for an hour, so that
-# they are not downloaded for every tool call
+# Documents from GitHub (the ODD, the registry, the research list, the API
+# README) are cached for an hour, so that they are not downloaded for every tool
+# call. After a failed download, the next attempt is made after a minute.
 DRACOR_CACHE_SECONDS = 3600
+DRACOR_CACHE_RETRY_SECONDS = 60
 _cache = {}
-_cache_locks = {}
+_cache_locks = {key: threading.Lock()
+                for key in ("odd", "registry", "research", "api_readme")}
 
 XML_NAMESPACES = {
     'tei': 'http://www.tei-c.org/ns/1.0',
@@ -192,24 +197,44 @@ def check_paging(items_per_page: int, page: int, all_at_once: bool = False):
 def cached(key: str, load):
     """Return the result of load(), keeping it for DRACOR_CACHE_SECONDS
 
-    Errors are not cached, so a failed download is retried on the next call. If
-    an expired copy exists, it is used until the download works again. Calls
-    that arrive at the same time for the same key load it only once.
+    If load() fails, the expired copy is used if there is one, otherwise the
+    error is raised. Either way, load() is only tried again after
+    DRACOR_CACHE_RETRY_SECONDS, so that calls during an outage don't each wait
+    for the timeout. Only one call at a time runs load(); calls that arrive
+    meanwhile use the expired copy, or wait for the result if there is none.
     """
-    with _cache_locks.setdefault(key, threading.Lock()):
+    def result(entry):
+        if "value" in entry:
+            return entry["value"]
+        raise entry["error"]
+
+    # Entries are replaced, never changed, so they can be read without the lock
+    entry = _cache.get(key)
+    if entry is not None and time.monotonic() < entry["expires"]:
+        return result(entry)
+    lock = _cache_locks[key]
+    has_copy = entry is not None and "value" in entry
+    if not lock.acquire(blocking=not has_copy):
+        return entry["value"]
+    try:
+        # another call may have finished loading while this one waited
         entry = _cache.get(key)
-        if entry is not None and time.monotonic() - entry[0] < DRACOR_CACHE_SECONDS:
-            return entry[1]
+        if entry is not None and time.monotonic() < entry["expires"]:
+            return result(entry)
         try:
             value = load()
+            entry = {"value": value, "loaded": time.monotonic()}
+            entry["expires"] = entry["loaded"] + DRACOR_CACHE_SECONDS
         except Exception as e:
-            if entry is None:
-                raise
-            logger.warning("Could not refresh %s, using the copy from %d minutes ago: %s",
-                           key, (time.monotonic() - entry[0]) // 60, e)
-            return entry[1]
-        _cache[key] = (time.monotonic(), value)
-        return value
+            entry = {**(entry or {}), "error": e,
+                     "expires": time.monotonic() + DRACOR_CACHE_RETRY_SECONDS}
+            if "value" in entry:
+                logger.warning("Could not refresh %s, using the copy from %d minutes ago: %s",
+                               key, (time.monotonic() - entry["loaded"]) // 60, e)
+        _cache[key] = entry
+        return result(entry)
+    finally:
+        lock.release()
 
 
 def path_segment(value) -> str:
@@ -1278,7 +1303,12 @@ def parse_odd_helper():
 
         # Fetch and parse the XML
         r = http_request("GET", DRACOR_ODD_URL)
-        return etree.fromstring(r.content, parser)
+        root = etree.fromstring(r.content, parser)
+        # the permissive parser returns None for an empty or unusable document;
+        # raise, so that it is not cached
+        if root is None:
+            raise ValueError(f"Could not parse the ODD from {DRACOR_ODD_URL}")
+        return root
 
     return cached("odd", load)
 
@@ -1402,8 +1432,7 @@ def get_dracor_based_research():
     (https://github.com/dracor-org/dracor-docs).
     """
     try:
-        r = http_request("GET", DRACOR_RESEARCH_URL)
-        return r.text
+        return cached("research", lambda: http_request("GET", DRACOR_RESEARCH_URL).text)
     except Exception as e:
         return {"error": str(e)}
 
@@ -1417,8 +1446,7 @@ def get_readme_form_dracor_api_github_repo():
     """
     try:
         request_url = "https://raw.githubusercontent.com/dracor-org/dracor-api/refs/heads/main/README.md"
-        r = http_request("GET", request_url)
-        return r.text
+        return cached("api_readme", lambda: http_request("GET", request_url).text)
     except Exception as e:
         return {"error": str(e)}
 
