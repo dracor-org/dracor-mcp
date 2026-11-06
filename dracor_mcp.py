@@ -41,8 +41,6 @@ XML_NAMESPACES = {
 
 DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-frontend/refs/heads/main/public/doc/research.md"
 
-DRACOR_RELAXNG_URL = DRACOR_API_BASE_URL.split("/api/")[0] + "/schema.rng"
-
 # Create the FastMCP server instance
 mcp = FastMCP(f"DraCor API ({DRACOR_API_BASE_URL})")
 
@@ -1444,50 +1442,6 @@ def get_readme_form_dracor_api_github_repo():
     except Exception as e:
         return {"error": str(e)}
 
-
-# Editing Support
-
-def get_relaxng_schema_helper(schema_url: str = DRACOR_RELAXNG_URL):
-    """Get DraCor RelaxNG Schema
-
-    Helper function to fetch and parse the DraCor RelaxNG Schema
-    """
-
-    try:
-        r = requests.get(schema_url)
-        relax_ng_doc = etree.fromstring(r.content)
-        # build the schema
-        schema = etree.RelaxNG(relax_ng_doc)
-        return schema
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool()
-def validate_xml_file(file_name: str, file_content: str, schema_url: str = DRACOR_RELAXNG_URL):
-    """Validate XML File
-
-    Validate the content of a XML file against the DraCor schema.
-
-    Args:
-        file_name (str): Name of the file
-        file_content (str): Content of the attached XML file
-        schema_url (str): URL of the DraCor Schema.
-            Setting is optional, don't do it if not explicitly stated in the prompt.
-    """
-    try:
-        doc = etree.fromstring(file_content.encode('utf-8'))
-        schema = get_relaxng_schema_helper(schema_url=schema_url)
-        valid = schema.validate(doc)
-        if valid:
-            return {"valid": valid,
-                    "comment": f"The XML validates against the DraCor RelaxNG schema from {schema_url}."}
-        else:
-            return {"valid": valid,
-                    "comment": f"The XML does not validate against the DraCor RelaxNG schema from {schema_url}. See error log",
-                    "error_log": schema.error_log}
-    except Exception as e:
-        return {"error": str(e)}
 
 # Admin functions (for local instances)
 
