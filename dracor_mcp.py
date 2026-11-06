@@ -48,6 +48,10 @@ DRACOR_API_BASE_URL = str(os.environ.get(
 DRACOR_MCP_TRANSPORT = str(os.environ.get(
     "DRACOR_MCP_TRANSPORT", "streamable-http"))
 
+# Address and port the server listens on with the HTTP transports
+DRACOR_MCP_HOST = os.environ.get("DRACOR_MCP_HOST", "0.0.0.0")
+DRACOR_MCP_PORT = int(os.environ.get("DRACOR_MCP_PORT", "8000"))
+
 DRACOR_ODD_URL = "https://raw.githubusercontent.com/dracor-org/dracor-schema/refs/heads/main/dracor.odd"
 
 # The parsed ODD is cached for an hour, so that it is not downloaded for every tool call
@@ -62,6 +66,9 @@ XML_NAMESPACES = {
 
 # The research list moved from dracor-frontend to dracor-docs (see #17)
 DRACOR_RESEARCH_URL = "https://raw.githubusercontent.com/dracor-org/dracor-docs/refs/heads/main/doc/research.md"
+
+# List of all DraCor corpora, including those not (yet) published
+DRACOR_REGISTRY_URL = "https://raw.githubusercontent.com/dracor-org/dracor-registry/refs/heads/main/corpora.json"
 
 # Create the FastMCP server instance
 def get_server_version() -> Optional[str]:
@@ -289,6 +296,27 @@ def get_corpus(corpus_name: str):
     try:
         corpus = api_request(f"corpora/{path_segment(corpus_name)}")
         return {"corpus": corpus}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_corpus_registry():
+    """List all corpora registered in the DraCor Registry
+
+    The DraCor Registry (https://github.com/dracor-org/dracor-registry) lists all DraCor corpora, including
+    corpora that are still in development or only planned. Use it to find out which corpora exist or are planned.
+    The tool `get_corpora` lists the corpora that are available in the DraCor instance this server is connected to,
+    together with their metrics.
+
+    Each corpus has a name (identifier, e.g. `ger`), title, repository, description, and a status:
+    `published` (stable, available at https://dracor.org), `draft` (under development, available at
+    https://staging.dracor.org) or `proposed` (planned or in very early development).
+    """
+    try:
+        r = http_request("GET", DRACOR_REGISTRY_URL)
+        r.raise_for_status()
+        return {"corpora": r.json()}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1542,8 +1570,8 @@ def remove_corpus(corpus_name: str):
 if __name__ == "__main__":
     if DRACOR_MCP_TRANSPORT == "sse":
         mcp.run(transport="sse",
-                host="0.0.0.0",
-                port=8000,
+                host=DRACOR_MCP_HOST,
+                port=DRACOR_MCP_PORT,
                 path="/sse",
                 host_origin_protection=True,
                 allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,
@@ -1551,8 +1579,8 @@ if __name__ == "__main__":
                 )
     elif DRACOR_MCP_TRANSPORT == "streamable-http":
         mcp.run(transport="streamable-http",
-                host="0.0.0.0",
-                port=8000,
+                host=DRACOR_MCP_HOST,
+                port=DRACOR_MCP_PORT,
                 path="/mcp",
                 host_origin_protection=True,
                 allowed_hosts=DRACOR_MCP_ALLOWED_HOSTS,

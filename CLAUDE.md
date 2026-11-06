@@ -24,6 +24,7 @@ The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so r
 
 - `DRACOR_API_BASE_URL` — DraCor API base, default `https://staging.dracor.org/api/v1`. Also used in the server name.
 - `DRACOR_MCP_TRANSPORT` — `streamable-http` (default, path `/mcp`), `sse` (path `/sse`), or `stdio`. Only honored in the `if __name__ == "__main__"` block; `fastmcp run`/`fastmcp dev inspector` ignore it.
+- `DRACOR_MCP_HOST` / `DRACOR_MCP_PORT` — address and port for the HTTP transports, default `0.0.0.0` / `8000`.
 - `DRACOR_MCP_ENABLE_ADMIN_TOOLS` — set to `true` to enable the write/admin tools (tagged `admin`, disabled with `mcp.disable(tags={"admin"})` otherwise). Must stay off on public deployments.
 - `DRACOR_EXISTDB_ADMIN` / `DRACOR_EXISTDB_PWD` — HTTP Basic credentials for the write/admin tools against a local DraCor eXist-DB instance.
 - `DRACOR_MCP_ALLOWED_HOSTS` / `DRACOR_MCP_ALLOWED_ORIGINS` — comma separated host names / origins accepted in the `Host` / `Origin` headers (DNS rebinding protection, `host_origin_protection=True`). localhost is always accepted; any other host gets HTTP 421, so deployments behind a proxy must set the host name.
