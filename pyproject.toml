@@ -1,11 +1,11 @@
 [project]
 name = "dracor-mcp"
-version = "0.1.0"
+version = "1.0.0-beta.1"
 description = "DraCor MCP server for interacting with the Drama Corpora Project API v1"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp == 2.11.3",
+    "fastmcp == 4.1.6",
     "requests",
     "pydantic",
     "python-multipart",

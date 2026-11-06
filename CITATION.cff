@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "DraCor MCP Server"
-version: "v1.0.0-alpha.2"
+version: "1.0.0-beta.1"
 date-released: "2025-05-20"
 url: "https://github.com/dracor-org/dracor-mcp"
 repository-code: "https://github.com/dracor-org/dracor-mcp"
@@ -25,7 +25,7 @@ keywords:
 preferred-citation:
   type: software
   title: "DraCor MCP Server"
-  version: "v1.0.0-alpha.2"
+  version: "1.0.0-beta.1"
   authors:
     - given-names: "Ingo"
       family-names: "Börner"

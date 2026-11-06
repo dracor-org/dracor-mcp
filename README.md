@@ -123,7 +123,7 @@ If running DraCor locally you can set the admin user of the eXist-DB and the pas
 For testing and development:
 
 ```
-fastmcp dev dracor_mcp.py
+fastmcp dev inspector dracor_mcp.py
 ```
 
 This will launch the MCP Inspector where you can test your tools and resources interactively.
