@@ -24,7 +24,10 @@ The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so r
 
 - `DRACOR_API_BASE_URL` — DraCor API base, default `https://staging.dracor.org/api/v1`. Also used in the server name.
 - `DRACOR_MCP_TRANSPORT` — `streamable-http` (default, path `/mcp`), `sse` (path `/sse`), or `stdio`. Only honored in the `if __name__ == "__main__"` block; `fastmcp run`/`fastmcp dev inspector` ignore it.
+- `DRACOR_MCP_ENABLE_ADMIN_TOOLS` — set to `true` to enable the write/admin tools (tagged `admin`, disabled with `mcp.disable(tags={"admin"})` otherwise). Must stay off on public deployments.
 - `DRACOR_EXISTDB_ADMIN` / `DRACOR_EXISTDB_PWD` — HTTP Basic credentials for the write/admin tools against a local DraCor eXist-DB instance.
+- `DRACOR_MCP_ALLOWED_HOSTS` / `DRACOR_MCP_ALLOWED_ORIGINS` — comma separated host names / origins accepted in the `Host` / `Origin` headers (DNS rebinding protection, `host_origin_protection=True`). localhost is always accepted; any other host gets HTTP 421, so deployments behind a proxy must set the host name.
+- `DRACOR_HTTP_TIMEOUT` — timeout in seconds for outgoing requests, default 60.
 
 ## Architecture of `dracor_mcp.py`
 
@@ -32,6 +35,7 @@ The Docker image installs dependencies from `uv.lock` (`uv sync --frozen`), so r
 - **Resources**: `corpora://` (via DTS collection) and `registry://` (DraCor registry JSON from GitHub). A templated `corpora://{corpus_name}` resource is commented out because Claude Desktop doesn't support resource templates.
 - **Tools**, grouped by section comments: regular API endpoints; `*_helper` tools that post-process API data (paging, filtering by author/title/year, minimal play lists) to keep responses within LLM context limits; DTS (Distributed Text Services) endpoints; documentation tools that fetch and parse external sources at call time (API ontology TTL via `rdflib`, the DraCor ODD via `lxml`, OpenAPI spec, research.md); and admin tools (`add_corpus`, `add_play_to_corpus`, `remove_*`, `load_corpus_from_repository`) that POST/PUT/DELETE with Basic auth.
 - **Conventions**: tools catch exceptions and return `{"error": str(e)}` rather than raising; successful results are usually wrapped in a dict keyed by the data type (e.g. `{"corpus": ...}`).
+- **Building requests**: pass every value that comes from a tool argument through `path_segment()` when it goes into a URL path, and through `params=` when it goes into the query string, so arguments can't change the request (e.g. `../`, `?`, `&`). Send requests with `http_request(method, url, ...)`, not `requests` directly: it applies `DRACOR_HTTP_TIMEOUT` and turns a timeout into a message the model can act on. Use XPath variables (`root.xpath("//x[@id=$id]", id=...)`) instead of formatting values into XPath expressions.
 
 ## Docstrings are the product
 
