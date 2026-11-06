@@ -1,8 +1,9 @@
 services:
   dracor-mcp:
-    image: "dracor/mcp:1.0.0-beta.1"
+    image: "dracor/mcp:dev"
     build:
       context: .
+    pull_policy: build
     container_name: dracor-mcp
     environment:
       - DRACOR_API_BASE_URL=https://staging.dracor.org/api/v1

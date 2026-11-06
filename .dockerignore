@@ -1,0 +1,8 @@
+.git
+.github
+.venv
+__pycache__
+*.egg-info
+.env
+.DS_Store
+build-push-dockerhub_command.txt
