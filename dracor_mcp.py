@@ -110,18 +110,44 @@ if not DRACOR_MCP_ENABLE_ADMIN_TOOLS:
     mcp.disable(tags={"admin"})
 
 
-def http_request(method: str, url: str, **kwargs) -> requests.Response:
+def http_request(method: str, url: str, raise_for_status: bool = True,
+                 **kwargs) -> requests.Response:
     """Send an HTTP request with the timeout set in DRACOR_HTTP_TIMEOUT
 
-    A timeout is reported with a message the model can act on.
+    A timeout is reported with a message the model can act on. An error status
+    (4xx, 5xx) raises an HTTPError with the status, the URL and the message the
+    server sent, unless raise_for_status is False, e.g. for tools that report
+    specific status codes.
     """
     kwargs.setdefault("timeout", DRACOR_HTTP_TIMEOUT)
     try:
-        return requests.request(method, url, **kwargs)
+        response = requests.request(method, url, **kwargs)
     except requests.Timeout:
         raise TimeoutError(
             f"{urlsplit(url).hostname} did not respond within {kwargs['timeout']} seconds. "
             "Tell the user, and retry later or with a narrower request.") from None
+    if raise_for_status and not response.ok:
+        message = f"{response.status_code} {response.reason} for url: {response.url}"
+        # the API explains many errors, e.g. "CitableUnit 'x' not found."
+        if "html" not in response.headers.get("Content-Type", ""):
+            detail = " ".join(response.text.split())[:300]
+            if detail:
+                message += f" ({detail})"
+        raise requests.HTTPError(message, response=response)
+    return response
+
+
+def check_paging(items_per_page: int, page: int, all_at_once: bool = False):
+    """Raise a clear error if a batch can't be served
+
+    all_at_once: the tool returns everything if both values are 0
+    """
+    if page < 1 or items_per_page < 1:
+        message = (f"Invalid batch request (page={page}, items_per_page={items_per_page}): "
+                   "page and items_per_page must both be at least 1, the first page is 1.")
+        if all_at_once:
+            message += " Set both to 0 to get all items at once."
+        raise ValueError(message)
 
 
 def path_segment(value) -> str:
@@ -141,7 +167,6 @@ def api_request(endpoint: str, params: Optional[Dict] = None) -> Any:
     """Make a request to the DraCor API v1."""
     url = f"{DRACOR_API_BASE_URL}/{endpoint}"
     response = http_request("GET", url, params=params)
-    response.raise_for_status()
     return response.json()
 
 # Additional helper function to make DraCor API requests
@@ -196,15 +221,11 @@ def api_get(corpusname: str = None,
 
     # send the response
     r = http_request("GET", request_url)
-    if r.status_code == 200:
-        # successful request, decide if response need to be parsed
-        if parse_json is True:
-            return r.json()
-        else:
-            return r.text
+    # decide if response need to be parsed
+    if parse_json is True:
+        return r.json()
     else:
-        raise Exception(
-            f"Request was not successful. Server returned status code: {str(r.status_code)}")
+        return r.text
 
 # --------------
 # HEALTH CHECK
@@ -250,8 +271,7 @@ def get_corpora():
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora?include=metrics"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"corpora": r.json()}
+        return {"corpora": r.json()}
     except Exception as e:
         return {"error": str(e)}
 
@@ -361,8 +381,7 @@ def get_play_tei(corpus_name: str, play_name: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/tei"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return r.text
+        return r.text
     except Exception as e:
         return {"error": str(e)}
 
@@ -380,8 +399,7 @@ def get_play_plaintext(corpus_name: str, play_name: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/txt"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return r.text
+        return r.text
     except Exception as e:
         return {"error": str(e)}
 
@@ -421,25 +439,24 @@ def get_play_network(corpus_name: str,
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/csv"
         r = http_request("GET", request_url)
 
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            nodes = []
-            edges = []
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                if row[0] not in nodes:
-                    nodes.append(row[0])
-                if row[2] not in nodes:
-                    nodes.append(row[2])
-                # edges properties: Source,Type,Target,Weight
-                item = {}
-                item["source"] = row[0]
-                item["type"] = row[1].lower()
-                item["target"] = row[2]
-                item["weight"] = row[3]
-                edges.append(item)
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        nodes = []
+        edges = []
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            if row[0] not in nodes:
+                nodes.append(row[0])
+            if row[2] not in nodes:
+                nodes.append(row[2])
+            # edges properties: Source,Type,Target,Weight
+            item = {}
+            item["source"] = row[0]
+            item["type"] = row[1].lower()
+            item["target"] = row[2]
+            item["weight"] = row[3]
+            edges.append(item)
 
         return {"nodes": nodes, "edges": edges}
 
@@ -465,22 +482,21 @@ def get_play_character_relations(corpus_name: str, play_name: str):
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/csv"
         r = http_request("GET", request_url)
 
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            relations = []
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                # Source,Type,Target,Label
-                # odoardo,Directed,emilia,parent_of
-                # claudia,Directed,emilia,parent_of
-                item = {}
-                item["source"] = row[0]
-                item["type"] = row[1].lower()
-                item["target"] = row[2]
-                item["label"] = row[3]
-                relations.append(item)
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        relations = []
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            # Source,Type,Target,Label
+            # odoardo,Directed,emilia,parent_of
+            # claudia,Directed,emilia,parent_of
+            item = {}
+            item["source"] = row[0]
+            item["type"] = row[1].lower()
+            item["target"] = row[2]
+            item["label"] = row[3]
+            relations.append(item)
 
         return {"relations": relations}
 
@@ -620,8 +636,7 @@ def get_plays_with_characters_by_wikidata_id(qid: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/character/{path_segment(qid)}"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"plays_with_character": r.json()}
+        return {"plays_with_character": r.json()}
 
     except Exception as e:
         return {"error": str(e)}
@@ -641,8 +656,7 @@ def get_author_info_from_wikidata(qid: str):
     try:
         request_url = f"{DRACOR_API_BASE_URL}/wikidata/author/{path_segment(qid)}"
         r = http_request("GET", request_url)
-        if r.status_code == 200:
-            return {"author": r.json()}
+        return {"author": r.json()}
 
     except Exception as e:
         return {"error": str(e)}
@@ -666,20 +680,19 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
         r = http_request("GET", request_url)
 
         data = []
-        if r.status_code == 200:
-            csv_filelike = StringIO(r.text)
-            reader = csv.reader(csv_filelike, delimiter=",")
-            # skip the first row:
-            next(reader, None)
-            for row in reader:
-                item = {}
-                item["id"] = row[0]
-                item["title"] = row[1].lower()
-                if row[2] == "":
-                    item["q"] = None
-                else:
-                    item["q"] = row[2]
-                data.append(item)
+        csv_filelike = StringIO(r.text)
+        reader = csv.reader(csv_filelike, delimiter=",")
+        # skip the first row:
+        next(reader, None)
+        for row in reader:
+            item = {}
+            item["id"] = row[0]
+            item["title"] = row[1].lower()
+            if row[2] == "":
+                item["q"] = None
+            else:
+                item["q"] = row[2]
+            data.append(item)
 
         # no batch requested if limit and offset are 0 (default)
         if page == 0 and items_per_page == 0:
@@ -697,6 +710,7 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
         else:
             # requested a batch
             total_items = len(data)
+            check_paging(items_per_page, page, all_at_once=True)
             start_index = (page - 1) * items_per_page
             total_pages = (len(data) + items_per_page - 1) // items_per_page
 
@@ -710,7 +724,7 @@ def get_wikidata_mixnmatch(items_per_page: int = 0, page: int = 0):
             pagination["next_page"] = page < total_pages
             pagination["previous_page"] = page > 1
 
-        return {"pagination": pagination, "data": data}
+        return {"pagination": pagination, "data": result}
 
     except Exception as e:
         return {"error": str(e)}
@@ -770,7 +784,7 @@ def get_links_to_playdata_helper(corpus_name: str, play_name: str):
     urls["download_network_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/gexf"
     urls["download_network_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/networkdata/graphml"
     urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/gexf"
-    urls["download_character_relation_data_as_gexf"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/graphml"
+    urls["download_character_relation_data_as_graphml"] = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}/relations/graphml"
 
     return {"urls": urls}
 
@@ -813,6 +827,7 @@ def get_minimal_data_of_plays_of_corpus_helper(corpus_name: str,
         else:
             # requested a batch
             total_plays = len(corpus["plays"])
+            check_paging(items_per_page, page, all_at_once=True)
             start_index = (page - 1) * items_per_page
             total_pages = (total_plays + items_per_page - 1) // items_per_page
 
@@ -884,6 +899,7 @@ def get_playnames_in_corpus_helper(corpus_name: str,
         else:
             # batches
             total_plays = len(corpus["plays"])
+            check_paging(items_per_page, page, all_at_once=True)
             start_index = (page - 1) * items_per_page
             total_pages = (total_plays + items_per_page - 1) // items_per_page
 
@@ -924,6 +940,7 @@ def get_corpus_metadata_paged_helper(corpus_name: str,
         metadata = api_get(corpusname=corpus_name, method="metadata")
 
         total_items = len(metadata)
+        check_paging(items_per_page, page)
         start_index = (page - 1) * items_per_page
         total_pages = (total_items + items_per_page - 1) // items_per_page
 
@@ -960,6 +977,7 @@ def get_corpus_contents_paged_helper(corpus_name: str,
         corpus = api_get(corpusname=corpus_name)
 
         total_items = len(corpus["plays"])
+        check_paging(items_per_page, page)
         start_index = (page - 1) * items_per_page
         total_pages = (total_items + items_per_page - 1) // items_per_page
 
@@ -1068,8 +1086,7 @@ def dts_entrypoint():
     """
     try:
         r = http_request("GET", f"{DRACOR_API_BASE_URL}/dts")
-        if r.status_code == 200:
-            return r.json()
+        return r.json()
     except Exception as e:
         return {"error": str(e)}
 
@@ -1178,7 +1195,6 @@ def parse_odd_helper():
 
     # Fetch and parse the XML
     r = http_request("GET", DRACOR_ODD_URL)
-    r.raise_for_status()
     root = etree.fromstring(r.content, parser)
 
     _odd_cache["root"] = root
@@ -1306,7 +1322,6 @@ def get_dracor_based_research():
     """
     try:
         r = http_request("GET", DRACOR_RESEARCH_URL)
-        r.raise_for_status()
         return r.text
     except Exception as e:
         return {"error": str(e)}
@@ -1346,7 +1361,8 @@ def add_corpus(corpus_metadata: dict):
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
         request_url = f"{DRACOR_API_BASE_URL}/corpora"
-        r = http_request("POST", request_url, json=corpus_metadata, auth=credentials)
+        r = http_request("POST", request_url, json=corpus_metadata, auth=credentials,
+                         raise_for_status=False)
         if r.status_code == 200 or r.status_code == 201:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1379,7 +1395,8 @@ def load_corpus_from_repository(corpus_name: str):
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
         request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}"
         payload = {"load": True}
-        r = http_request("POST", request_url, json=payload, auth=credentials)
+        r = http_request("POST", request_url, json=payload, auth=credentials,
+                         raise_for_status=False)
         if r.status_code == 202:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1424,7 +1441,8 @@ def add_play_to_corpus(corpus_name: str, play_name: str, tei: str):
         # should TEI file be parsed and validated?
 
         r = http_request("PUT", request_url, data=tei,
-                         headers=headers, auth=credentials)
+                         headers=headers, auth=credentials,
+                         raise_for_status=False)
         if r.status_code == 200:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1461,7 +1479,8 @@ def remove_play_from_corpus(corpus_name: str, play_name: str):
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
         request_url = request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}/plays/{path_segment(play_name)}"
-        r = http_request("DELETE", request_url, auth=credentials)
+        r = http_request("DELETE", request_url, auth=credentials,
+                         raise_for_status=False)
         if r.status_code == 200:
             return {"status": "Success",
                     "status_code": r.status_code,
@@ -1494,7 +1513,8 @@ def remove_corpus(corpus_name: str):
     try:
         credentials = HTTPBasicAuth(DRACOR_EXISTDB_ADMIN, DRACOR_EXISTDB_PWD)
         request_url = f"{DRACOR_API_BASE_URL}/corpora/{path_segment(corpus_name)}"
-        r = http_request("DELETE", request_url, auth=credentials)
+        r = http_request("DELETE", request_url, auth=credentials,
+                         raise_for_status=False)
         if r.status_code == 200:
             return {"status": "Success",
                     "status_code": r.status_code,
