@@ -968,7 +968,7 @@ def get_plays_in_corpus_by_title_helper(corpus_name: str, title: str):
 
     Args:
         corpus_name (str): Identifier of a corpus, e.g. `ger`, `rus`, `als`
-        author_name (str): Main title of play, e.g. `Faust`, `Tempest`
+        title (str): Main title of play, e.g. `Faust`, `Tempest`
     """
 
     try:
